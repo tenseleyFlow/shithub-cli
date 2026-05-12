@@ -78,10 +78,14 @@ type Options struct {
 // builder; the populated Options is read by Export.
 //
 // `--json` takes a comma-separated field list as its value
-// (`--json id,title` or `--json=id,title`). The bare `--json` form is
-// not supported because pflag's NoOptDefVal sentinel conflicts with
-// the space-separated form gh users expect. Field discovery lives on
-// the help system instead (run `shithub <cmd> --help` to see fields).
+// (`--json id,title` or `--json=id,title`). Field discovery uses the
+// explicit-empty form `--json=` (Export lists fields and exits 0). The
+// truly-bare `--json` (no `=`) is NOT supported here, intentionally:
+// enabling it would require setting pflag's NoOptDefVal sentinel, which
+// would then steal the next positional argument when users write
+// `--json id,title` — breaking the daily-driver form. The audit #139
+// decision (2026-05-12) prioritizes the space-separated form; see also
+// the C02 spec for the formal rationale.
 func AddFlags(cmd *cobra.Command, opts *Options) {
 	cmd.Flags().StringVar(&opts.JSONFields, FlagJSON, "", "output JSON with the specified fields (comma-separated)")
 	cmd.Flags().StringVarP(&opts.JQ, FlagJQ, FlagJQShort, "", "filter JSON output with a jq expression")
