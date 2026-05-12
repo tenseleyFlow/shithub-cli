@@ -25,6 +25,7 @@ import (
 	labelcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/label"
 	orgcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/org"
 	prcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr"
+	releasecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/release"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
 	searchcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search"
 	sshkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/sshkey"
@@ -161,4 +162,5 @@ func init() {
 	rootCmd.AddCommand(orgcmd.NewCmd(f))
 	rootCmd.AddCommand(sshkeycmd.NewCmd(f))
 	rootCmd.AddCommand(gpgkeycmd.NewCmd(f))
+	rootCmd.AddCommand(releasecmd.NewCmd(f))
 }
