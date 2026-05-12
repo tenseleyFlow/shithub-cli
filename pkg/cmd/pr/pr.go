@@ -8,14 +8,18 @@ import (
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	checkoutCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/checkout"
+	checksCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/checks"
 	closeCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/close"
+	commentCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/comment"
 	createCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/create"
 	diffCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/diff"
 	editCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/edit"
 	listCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/list"
 	lockCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/lock"
+	mergeCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/merge"
 	readyCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/ready"
 	reopenCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/reopen"
+	reviewCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/review"
 	statusCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/status"
 	updatebranchCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/updatebranch"
 	viewCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/view"
@@ -42,8 +46,11 @@ Common subcommands:
   update-branch update the PR branch with its base
   lock          lock the conversation
   unlock        unlock the conversation
-
-Review and merge subcommands ship in a follow-up sprint (C10).`,
+  review        submit a review (approve / request-changes / comment)
+  comment       add or edit a comment on the PR conversation
+  merge         merge a pull request (merge/squash/rebase, auto, admin)
+  checks        show check runs for the PR head SHA
+`,
 	}
 	cmd.AddCommand(createCmd.NewCmd(f))
 	cmd.AddCommand(listCmd.NewCmd(f))
@@ -58,5 +65,9 @@ Review and merge subcommands ship in a follow-up sprint (C10).`,
 	cmd.AddCommand(updatebranchCmd.NewCmd(f))
 	cmd.AddCommand(lockCmd.NewLockCmd(f))
 	cmd.AddCommand(lockCmd.NewUnlockCmd(f))
+	cmd.AddCommand(reviewCmd.NewCmd(f))
+	cmd.AddCommand(commentCmd.NewCmd(f))
+	cmd.AddCommand(mergeCmd.NewCmd(f))
+	cmd.AddCommand(checksCmd.NewCmd(f))
 	return cmd
 }
