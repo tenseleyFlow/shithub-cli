@@ -5,6 +5,7 @@ package checks
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -177,6 +178,52 @@ func TestChecksWatchFailFast(t *testing.T) {
 	}
 	if err := Run(context.Background(), opts); err == nil {
 		t.Fatal("expected error from --fail-fast")
+	}
+}
+
+// TestChecksWatchHonorsContextCancel covers audit #147: the --watch
+// loop must return ctx.Err() promptly when the parent context is
+// cancelled (e.g., Ctrl-C). Without this the user's interrupt would
+// only take effect on the next tick — up to opts.Interval of latency.
+func TestChecksWatchHonorsContextCancel(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/1", 200, pulls.PR{
+		Number: 1, State: "open", Head: pulls.Ref{SHA: "abc"},
+	})
+	// Always-pending checks so the loop would otherwise spin forever.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/commits/abc/check-runs", 200, checksclient.CheckRunsResponse{
+		CheckRuns: []checksclient.CheckRun{
+			{Name: "pending-1", Status: "in_progress"},
+		},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Cancel after a short delay so the first iteration completes and we
+	// enter the select on the ticker.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "1",
+		Repo:        "o/r",
+		Watch:       true,
+		Interval:    200 * time.Millisecond, // longer than the cancel delay
+		Timeout:     10 * time.Second,
+	}
+	start := time.Now()
+	err := Run(ctx, opts)
+	elapsed := time.Since(start)
+	if err == nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled; got %v", err)
+	}
+	// Cancellation should be honored well before the next 200ms tick.
+	if elapsed > 500*time.Millisecond {
+		t.Errorf("cancel latency too long: %s", elapsed)
 	}
 }
 
