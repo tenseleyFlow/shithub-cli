@@ -125,7 +125,7 @@ func TestRESTRetryOn5xx(t *testing.T) {
 	c, err := api.NewClient(api.ClientOptions{
 		BaseURL:    fake.URL(),
 		TokenFunc:  func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
-		MaxRetries: 4,
+		MaxRetries: api.IntPtr(4),
 		Timeout:    2 * time.Second,
 	})
 	if err != nil {
@@ -138,6 +138,63 @@ func TestRESTRetryOn5xx(t *testing.T) {
 	}
 	if hits := atomic.LoadInt32(&hits); hits != 3 {
 		t.Errorf("expected 3 server hits (2 retries), got %d", hits)
+	}
+}
+
+// TestMaxRetriesZeroDisablesRetries verifies that explicit zero (via
+// IntPtr(0)) actually disables retries — distinguishing the explicit
+// "disable" intent from the Go zero-value "unset" case. C03 DoD test.
+func TestMaxRetriesZeroDisablesRetries(t *testing.T) {
+	var hits int32
+	fake := fakeapi.New(t)
+	fake.Handle("GET", "/api/v1/flaky", func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(502)
+	})
+
+	c, err := api.NewClient(api.ClientOptions{
+		BaseURL:    fake.URL(),
+		TokenFunc:  func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
+		MaxRetries: api.IntPtr(0),
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	if err := c.REST(context.Background(), "GET", "flaky", nil, nil); err == nil {
+		t.Fatal("expected error on 502 with retries disabled")
+	}
+	if hits := atomic.LoadInt32(&hits); hits != 1 {
+		t.Errorf("expected 1 server hit (no retries), got %d", hits)
+	}
+}
+
+// TestMaxRetriesNilUsesDefault confirms nil leaves DefaultMaxRetries in
+// place — guarding against the prior bug where Go-zero ate the explicit
+// disable intent.
+func TestMaxRetriesNilUsesDefault(t *testing.T) {
+	var hits int32
+	fake := fakeapi.New(t)
+	fake.Handle("GET", "/api/v1/flaky", func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(502)
+	})
+
+	c, err := api.NewClient(api.ClientOptions{
+		BaseURL:   fake.URL(),
+		TokenFunc: func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
+		// MaxRetries omitted -> should be DefaultMaxRetries (3).
+		Timeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_ = c.REST(context.Background(), "GET", "flaky", nil, nil)
+	// 1 initial + DefaultMaxRetries retries = 4 attempts total.
+	if hits := atomic.LoadInt32(&hits); hits != int32(api.DefaultMaxRetries+1) {
+		t.Errorf("expected %d hits, got %d", api.DefaultMaxRetries+1, hits)
 	}
 }
 
@@ -343,7 +400,7 @@ func TestContextCancelInterruptsRetry(t *testing.T) {
 	c, _ := api.NewClient(api.ClientOptions{
 		BaseURL:    fake.URL(),
 		TokenFunc:  func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
-		MaxRetries: 5,
+		MaxRetries: api.IntPtr(5),
 		Timeout:    2 * time.Second,
 	})
 

@@ -32,6 +32,10 @@ const DefaultTimeout = 30 * time.Second
 // pathological case.
 const DefaultMaxRetries = 3
 
+// IntPtr returns a pointer to i. Useful for filling pointer fields like
+// ClientOptions.MaxRetries where 0 must be distinguishable from unset.
+func IntPtr(i int) *int { return &i }
+
 // DefaultMaxPages caps automatic pagination unless WithMaxPages overrides.
 // 30 pages is generous enough for daily-driver use without DoS-of-self
 // when --paginate hits a hot endpoint.
@@ -65,8 +69,13 @@ type ClientOptions struct {
 	UserAgent string
 	// Timeout overrides DefaultTimeout.
 	Timeout time.Duration
-	// MaxRetries overrides DefaultMaxRetries.
-	MaxRetries int
+	// MaxRetries overrides DefaultMaxRetries. nil leaves the default
+	// (DefaultMaxRetries); &0 disables retries entirely; &N (N>0) caps
+	// to N attempts. The pointer is required because Go's zero value
+	// (an int 0) would otherwise be indistinguishable from "I want to
+	// disable retries" and the prior signature silently treated zero
+	// as "unset."
+	MaxRetries *int
 	// Logger receives debug-level traces of every request when set;
 	// nil disables logging entirely.
 	Logger *slog.Logger
@@ -128,11 +137,12 @@ func NewClient(opts ClientOptions) (*Client, error) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	retries := opts.MaxRetries
-	if retries < 0 {
-		retries = 0
-	} else if retries == 0 {
-		retries = DefaultMaxRetries
+	retries := DefaultMaxRetries
+	if opts.MaxRetries != nil {
+		retries = *opts.MaxRetries
+		if retries < 0 {
+			retries = 0
+		}
 	}
 	hc := opts.HTTPClient
 	if hc == nil {
