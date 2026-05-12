@@ -14,15 +14,18 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/api"
 	"github.com/tenseleyFlow/shithub-cli/internal/browser"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
 )
 
 type options struct {
 	IO          *iostreams.IOStreams
+	HTTPClient  func(host string) (*api.Client, error)
 	DefaultHost func() string
 	GitRunner   git.Runner
 	Opener      func(url string) error
@@ -38,12 +41,18 @@ type options struct {
 	Settings  bool
 	Wiki      bool
 	NoBrowser bool
+
+	// disableAutoDetect lets tests skip the API roundtrip when they
+	// only care about URL composition. Production callers leave it
+	// false so a bare-number arg gets PR-vs-issue resolution.
+	disableAutoDetect bool
 }
 
 // NewCmd builds the cobra command.
 func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	opts := &options{
 		IO:          f.IOStreams,
+		HTTPClient:  f.HTTPClient,
 		DefaultHost: f.DefaultHost,
 		Opener:      browser.Open,
 	}
@@ -89,7 +98,7 @@ Examples:
 }
 
 // Run executes the browse operation.
-func Run(_ context.Context, opts *options) error {
+func Run(ctx context.Context, opts *options) error {
 	tab, err := pickTab(opts)
 	if err != nil {
 		return err
@@ -116,6 +125,15 @@ func Run(_ context.Context, opts *options) error {
 	ref, err := resolver.Resolve()
 	if err != nil {
 		return err
+	}
+
+	// Auto-detect PR vs issue when the user typed a bare number. The
+	// classifier doesn't know which one it is — without this check we'd
+	// always emit /pull/N, which 404s for issues. One PR-view roundtrip
+	// settles it; any non-404 failure falls back to /pull/N so an
+	// offline / unauthed run still produces a URL.
+	if target == TargetNumber && comp.Hint == "" && !opts.disableAutoDetect {
+		comp.Hint = autoDetectPRorIssue(ctx, opts, ref, comp.Number)
 	}
 
 	url, err := Compose(target, comp, ComposeOptions{Repo: ref, Tab: tab, Branch: opts.Branch})
@@ -162,6 +180,28 @@ func pickTab(opts *options) (Tab, error) {
 		return "", errors.New("browse: --projects, --releases, --settings, --wiki are mutually exclusive")
 	}
 	return picked, nil
+}
+
+// autoDetectPRorIssue asks the server whether `number` belongs to an
+// open PR. Returns "pr" or "issue" so Compose emits the right URL.
+// Any failure (auth, network, server) returns "pr" — that matches the
+// pre-#135 behavior and lets `browse N` keep working in offline mode.
+func autoDetectPRorIssue(ctx context.Context, opts *options, ref repocmdshared.RepoRef, number int) string {
+	if opts.HTTPClient == nil {
+		return "pr"
+	}
+	client, err := opts.HTTPClient(ref.Host)
+	if err != nil {
+		return "pr"
+	}
+	pc := pulls.NewClient(client)
+	if _, err := pc.View(ctx, ref.Owner, ref.Name, number); err != nil {
+		if api.IsNotFoundError(err) {
+			return "issue"
+		}
+		return "pr"
+	}
+	return "pr"
 }
 
 func hostOrDefault(fn func() string) string {
