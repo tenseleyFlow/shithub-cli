@@ -88,6 +88,7 @@ type Client struct {
 	timeout   time.Duration
 	policy    retryPolicy
 	logger    *slog.Logger
+	whoami    whoamiCache
 }
 
 // NewClient returns a Client built from opts, applying defaults for any
