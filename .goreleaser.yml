@@ -1,0 +1,62 @@
+# goreleaser configuration for shithub-cli.
+#
+# C00 ships a minimal cross-platform build stub. C25 owns full publishing
+# (Homebrew tap, Scoop bucket, deb/rpm, signing) — do not add publish
+# integrations here without coordinating with C25.
+
+version: 2
+
+project_name: shithub
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: shithub
+    main: ./cmd/shithub
+    binary: shithub
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/tenseleyFlow/shithub-cli/internal/build.Version={{.Version}}
+      - -X github.com/tenseleyFlow/shithub-cli/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/tenseleyFlow/shithub-cli/internal/build.Date={{.Date}}
+
+archives:
+  - id: shithub
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- .Arch }}
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+      - CONTRIBUTING.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot+{{.ShortCommit}}"
+
+changelog:
+  disable: true
