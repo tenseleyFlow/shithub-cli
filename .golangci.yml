@@ -1,0 +1,56 @@
+# golangci-lint v2 configuration for shithub-cli.
+# Conservative ruleset — linters added as patterns earn them, not preemptively.
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - bodyclose
+    - gosec
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: error-return
+        - name: error-naming
+        - name: if-return
+        - name: receiver-naming
+        - name: empty-block
+    gosec:
+      excludes:
+        # Subprocess invocation via safeexec is intentional in internal/git;
+        # we explicitly shell out to canonical git plumbing.
+        - G204
+  exclusions:
+    rules:
+      # Tests routinely use error returns we don't check.
+      - path: _test\.go
+        linters: [errcheck, gosec]
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/tenseleyFlow/shithub-cli
+    gofumpt:
+      extra-rules: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
