@@ -45,6 +45,12 @@ test: ## Run unit tests.
 test-race: ## Run tests with the race detector.
 	$(GO) test $(GOFLAGS) -race ./...
 
+integration: ## Run end-to-end tests against a live shithub. Requires SHITHUB_INTEGRATION_HOST and SHITHUB_INTEGRATION_TOKEN env vars; see internal/integration/doc.go for the contract.
+	@if [ -z "$$SHITHUB_INTEGRATION_HOST" ] || [ -z "$$SHITHUB_INTEGRATION_TOKEN" ]; then \
+		echo "make integration: set SHITHUB_INTEGRATION_HOST and SHITHUB_INTEGRATION_TOKEN"; exit 2; \
+	fi
+	$(GO) test $(GOFLAGS) -tags=integration -count=1 ./internal/integration/...
+
 bench: ## Run benchmarks.
 	$(GO) test $(GOFLAGS) -bench=. -run=^$$ ./...
 
