@@ -45,11 +45,22 @@ linters:
         # We intentionally persist HostEntry to YAML; the OAuthToken field
         # is the whole point of hosts.yml fallback storage.
         - G117
+        # math/rand/v2 is intentional for retry jitter — we want speed and
+        # decorrelation, not cryptographic randomness.
+        - G404
+    misspell:
+      ignore-rules:
+        # revive's import-naming rule; flagged as a typo of "imports".
+        - importas
   exclusions:
     rules:
       # Tests routinely use error returns we don't check.
       - path: _test\.go
         linters: [errcheck, gosec]
+      # mkResp in api/errors_test.go fabricates a *http.Response whose Body
+      # is http.NoBody; there is nothing to close.
+      - path: internal/api/errors_test\.go
+        linters: [bodyclose]
 
 formatters:
   enable:
