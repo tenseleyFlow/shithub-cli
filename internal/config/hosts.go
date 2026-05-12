@@ -119,6 +119,24 @@ func LoadHosts() (Hosts, error) {
 // Save writes hosts.yml back to disk via an atomic temp-rename with 0600
 // perms. An empty Hosts removes the file rather than persisting an empty
 // document; round-tripping should converge on "no entries -> no file".
+//
+// Concurrency: Save is NOT safe to call from multiple goroutines on the
+// same Hosts value (the map is plain), and two SEPARATE Hosts values
+// being saved to the same hosts.yml from the same or different
+// processes race at the filesystem layer — the atomic rename gives
+// last-writer-wins, so the surviving file is internally consistent but
+// changes from the losing writer are dropped. v1 ships this contract
+// because:
+//
+//   - No in-process subcommand fans out hosts mutations across goroutines
+//     (status / search fan out reads only, never writes).
+//   - Cross-process concurrent writes only happen if a user runs two
+//     `shithub auth login` / `auth logout` invocations simultaneously,
+//     which is rare enough to defer the file-lock work to a future sprint.
+//
+// Audit #152 (2026-05-12) verified the in-process side; a future change
+// adding parallel hosts mutation MUST add a sync.Mutex (or a *Mu wrapper)
+// around the underlying map.
 func (h Hosts) Save() error {
 	path, err := HostsFile()
 	if err != nil {

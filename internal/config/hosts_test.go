@@ -4,10 +4,12 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -98,6 +100,42 @@ func TestLoadHostsRefusesLoosePerms(t *testing.T) {
 	}
 	if !errors.Is(err, ErrHostsFilePerm) {
 		t.Errorf("want ErrHostsFilePerm, got %v", err)
+	}
+}
+
+// TestSaveAtomicNeverCorruptsFile covers audit #152: concurrent Save
+// calls (the cross-process or future cross-goroutine scenario) race on
+// hosts.yml, but the atomic temp-rename means the surviving file is
+// always one of the writers' inputs intact — never a torn half-write
+// or a YAML-unparseable mess. We spam N goroutines saving distinct
+// host sets, then load the file and verify it parses cleanly.
+func TestSaveAtomicNeverCorruptsFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("concurrency stress test")
+	}
+	withConfigDir(t)
+
+	const N = 20
+	var wg sync.WaitGroup
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func(i int) {
+			defer wg.Done()
+			h := Hosts{}
+			h.Get(fmt.Sprintf("h%d.test", i)).User = fmt.Sprintf("u%d", i)
+			_ = h.Save() // races are expected; we only care about file validity
+		}(i)
+	}
+	wg.Wait()
+
+	// LoadHosts must succeed — atomic rename guarantees the survivor is
+	// internally consistent even when many writers raced.
+	got, err := LoadHosts()
+	if err != nil {
+		t.Fatalf("file is corrupt after concurrent Save: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("expected exactly one surviving host entry; got %d (%v)", len(got), got)
 	}
 }
 
