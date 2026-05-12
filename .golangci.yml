@@ -20,6 +20,21 @@ linters:
     - gosec
     - revive
   settings:
+    errcheck:
+      exclude-functions:
+        # CLI output to stderr/stdout: failure is irrelevant — if the user
+        # closed the pipe we're going to terminate anyway. Wrapping every
+        # Fprintf with `_, _ =` is noise.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Writer).Write
+    staticcheck:
+      # QF1008 ("embedded field selector could be removed") is a quickfix
+      # suggestion only — the explicit form makes the source clearer at
+      # test sites that mix tf.Factory.X (factory member) with tf.X
+      # (testbench convenience). Disable.
+      checks: ["all", "-QF1008"]
     revive:
       rules:
         # Disable the stutter sub-check of `exported`; package-qualified
