@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -29,6 +30,45 @@ func asJSON(t *testing.T, v any) []byte {
 }
 
 // REST behaviour ---------------------------------------------------------
+
+// TestOwnerRepoPlaceholdersEscaped verifies that a hostile owner/repo
+// value is %-encoded before substitution. Without escaping, the bytes
+// "../../admin" would substitute literally and the request would target
+// /api/v1/repos/../../admin/r/contents — server-side path-cleaning
+// could then route it to /api/v1/admin/... and bypass the resource
+// scoping the {owner}/{repo} placeholders were meant to enforce.
+//
+// We use an httptest server directly (rather than fakeapi's routing)
+// so we can read r.RequestURI, which preserves the original wire bytes
+// before Go's net/http decodes path-escapes.
+func TestOwnerRepoPlaceholdersEscaped(t *testing.T) {
+	t.Setenv(api.EnvInsecureHTTP, "1")
+	var rawURI string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rawURI = r.RequestURI
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := api.NewClient(api.ClientOptions{
+		BaseURL:   srv.URL,
+		TokenFunc: func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
+		Timeout:   2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_ = c.REST(context.Background(), "GET", "/repos/{owner}/{repo}/contents", nil, nil,
+		api.WithOwner("../../admin"), api.WithRepo("r"))
+	if !strings.Contains(rawURI, "%2F") {
+		t.Errorf("expected raw URI to contain percent-encoded slashes, got %q", rawURI)
+	}
+	if strings.Contains(rawURI, "/../") {
+		t.Errorf("raw URI should NOT contain literal /../, got %q", rawURI)
+	}
+}
 
 func TestRESTGetUnmarshalsBody(t *testing.T) {
 	fake := fakeapi.New(t)

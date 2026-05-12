@@ -441,9 +441,14 @@ func (c *Client) composeURL(path string, o requestOptions) (string, error) {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path, nil
 	}
+	// Escape owner/repo before substitution: a hostile (or just typo'd)
+	// value like "../../admin" would otherwise traverse out of the
+	// /api/v1/repos/{owner}/{repo}/... namespace. url.PathEscape encodes
+	// slashes and dot-segments to their %-encoded form, so the server
+	// receives a single path segment per placeholder.
 	p := path
-	p = strings.ReplaceAll(p, "{owner}", o.owner)
-	p = strings.ReplaceAll(p, "{repo}", o.repo)
+	p = strings.ReplaceAll(p, "{owner}", url.PathEscape(o.owner))
+	p = strings.ReplaceAll(p, "{repo}", url.PathEscape(o.repo))
 
 	if !strings.HasPrefix(p, "/api/") && !strings.HasPrefix(p, "/login") {
 		p = strings.TrimPrefix(p, "/")
