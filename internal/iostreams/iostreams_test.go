@@ -165,24 +165,3 @@ func TestTerminalWidthFallback(t *testing.T) {
 		t.Errorf("TerminalWidth on non-TTY: want %d got %d", DefaultTerminalWidth, got)
 	}
 }
-
-func TestEnvBool(t *testing.T) {
-	cases := map[string]bool{
-		"":          false,
-		"0":         false,
-		"1":         true,
-		"true":      true,
-		"false":     false,
-		"yes":       true,
-		"truecolor": true,
-		"24bit":     true,
-	}
-	for v, want := range cases {
-		t.Run(v, func(t *testing.T) {
-			t.Setenv("SHITHUB_TEST_BOOL", v)
-			if got := envBool("SHITHUB_TEST_BOOL"); got != want {
-				t.Errorf("envBool(%q): want %v got %v", v, want, got)
-			}
-		})
-	}
-}

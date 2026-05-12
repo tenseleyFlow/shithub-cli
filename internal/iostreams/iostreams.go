@@ -13,7 +13,6 @@ import (
 	"bytes"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -202,20 +201,4 @@ func resolveColor(stdoutTTY bool) (enabled, is256, isTrue bool) {
 	isTrue = colorTerm == "truecolor" || colorTerm == "24bit"
 	is256 = isTrue || strings.Contains(term, "256")
 	return enabled, is256, isTrue
-}
-
-// envBool parses a non-empty env var as a boolean; used by future helpers
-// to keep the parsing logic consistent.
-func envBool(name string) bool {
-	v := os.Getenv(name)
-	if v == "" {
-		return false
-	}
-	b, err := strconv.ParseBool(v)
-	if err != nil {
-		// Treat any non-empty non-bool value as truthy (matches `1`, `yes`,
-		// `true`); CLICOLOR_FORCE=anything is the canonical pattern.
-		return v != "0"
-	}
-	return b
 }
