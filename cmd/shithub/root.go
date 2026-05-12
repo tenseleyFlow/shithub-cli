@@ -18,6 +18,7 @@ import (
 	apicmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/api"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 	browsecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/browse"
+	cachecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/cache"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
 	gpgkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gpgkey"
@@ -27,9 +28,11 @@ import (
 	prcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr"
 	releasecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/release"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
+	runcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/run"
 	searchcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search"
 	sshkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/sshkey"
 	statuscmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/status"
+	workflowcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/workflow"
 )
 
 // longDescription is split out so help text stays readable and we can
@@ -163,4 +166,7 @@ func init() {
 	rootCmd.AddCommand(sshkeycmd.NewCmd(f))
 	rootCmd.AddCommand(gpgkeycmd.NewCmd(f))
 	rootCmd.AddCommand(releasecmd.NewCmd(f))
+	rootCmd.AddCommand(workflowcmd.NewCmd(f))
+	rootCmd.AddCommand(runcmd.NewCmd(f))
+	rootCmd.AddCommand(cachecmd.NewCmd(f))
 }
