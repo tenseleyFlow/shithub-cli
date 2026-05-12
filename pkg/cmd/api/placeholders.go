@@ -5,6 +5,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -24,12 +25,19 @@ type placeholderSpec struct {
 }
 
 // substitute returns path with every recognized placeholder replaced by
-// the corresponding value. Missing values for placeholders that DO
-// appear in the path return an error so users see a clear "no -R or
-// SHITHUB_REPO set" message instead of a 404. Walks the placeholder
-// list in a fixed order so the error message for a missing value is
-// deterministic across runs (Go's map iteration is intentionally
-// randomized, which would otherwise flake on multi-placeholder paths).
+// the corresponding value, URL-escaped so a hostile owner/repo can't
+// traverse out of the /repos/{owner}/{repo}/... namespace. Re-audit
+// #157 (2026-05-12) — the typed api client got this escaping in #132,
+// but the raw `shithub api` passthrough pre-substitutes placeholders
+// here, before composeURL runs; without the escape, a value containing
+// `%2f` (a percent-encoded slash) substitutes literally and the
+// server's path canonicalization may decode and traverse.
+//
+// Missing values for placeholders that DO appear in the path return an
+// error so users see a clear "no -R or SHITHUB_REPO set" message
+// instead of a 404. Walks the placeholder list in a fixed order so the
+// error message for a missing value is deterministic across runs (Go's
+// map iteration is intentionally randomized).
 func (s placeholderSpec) substitute(path string) (string, error) {
 	tokens := []struct{ name, value string }{
 		{"{owner}", s.Owner},
@@ -43,7 +51,7 @@ func (s placeholderSpec) substitute(path string) (string, error) {
 		if t.value == "" {
 			return "", fmt.Errorf("api: %s placeholder needs -R owner/repo or %s env", t.name, EnvRepo)
 		}
-		path = strings.ReplaceAll(path, t.name, t.value)
+		path = strings.ReplaceAll(path, t.name, url.PathEscape(t.value))
 	}
 	return path, nil
 }

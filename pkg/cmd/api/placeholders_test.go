@@ -28,6 +28,30 @@ func TestPlaceholderSubstitute(t *testing.T) {
 	}
 }
 
+// TestPlaceholderSubstituteEscapesHostileInput covers re-audit #157:
+// a hostile {owner}/{repo} value with embedded path-traversal must be
+// percent-encoded by the raw-passthrough substitute, not just by the
+// typed-client composeURL downstream. Without the escape, a value
+// containing `%2f` substitutes literally and the server may decode it
+// back to `/` and traverse out of the namespaced URL.
+func TestPlaceholderSubstituteEscapesHostileInput(t *testing.T) {
+	t.Parallel()
+	s := placeholderSpec{Owner: "..%2f..%2fadmin", Repo: "r"}
+	got, err := s.substitute("repos/{owner}/{repo}/issues")
+	if err != nil {
+		t.Fatalf("substitute: %v", err)
+	}
+	// Each `%` must be encoded to `%25`, so `%2f` becomes `%252f`. The
+	// resulting path has no literal slashes inside the {owner} segment.
+	if strings.Contains(got, "%2f") && !strings.Contains(got, "%252f") {
+		t.Errorf("hostile owner not re-encoded: %q", got)
+	}
+	// The slashes between segments survive (only owner/repo content is escaped).
+	if !strings.HasPrefix(got, "repos/") || !strings.HasSuffix(got, "/r/issues") {
+		t.Errorf("segment slashes lost: %q", got)
+	}
+}
+
 func TestPlaceholderMissingValueErrors(t *testing.T) {
 	t.Parallel()
 	s := placeholderSpec{} // empty
