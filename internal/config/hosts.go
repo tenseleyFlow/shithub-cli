@@ -204,13 +204,84 @@ func (h Hosts) SetDefault(host string) error {
 	return nil
 }
 
-// NormalizeHost trims protocol prefixes and trailing slashes/whitespace so
-// callers can pass "https://shithub.sh/", "shithub.sh", or "  SHITHUB.SH "
-// interchangeably. We do not collapse IDN; that's a future concern.
+// NormalizeHost trims protocol prefixes and trailing slashes/whitespace
+// so callers can pass "https://shithub.sh/", "shithub.sh", or
+// "  SHITHUB.SH " interchangeably. Inputs that are clearly NOT a bare
+// host — embedded userinfo (`user@host`), a path component after the
+// host, an empty label, whitespace, or any character outside the
+// LDH+colon+dot set — return the empty string. Callers conventionally
+// treat empty as "use the default host," so hostile inputs collapse to
+// the safe default rather than carrying their malformed form forward.
+// IPv6 bracket form is supported.
 func NormalizeHost(host string) string {
 	h := strings.TrimSpace(host)
 	h = strings.TrimPrefix(h, "https://")
 	h = strings.TrimPrefix(h, "http://")
 	h = strings.TrimSuffix(h, "/")
+	if h == "" {
+		return ""
+	}
+	if !isValidHost(h) {
+		return ""
+	}
 	return strings.ToLower(h)
+}
+
+// isValidHost reports whether h is a bare host[:port] string. We accept
+// LDH labels (letters, digits, hyphen) joined by dots, plus an optional
+// `:port` suffix, plus the IPv6 bracket form. Anything containing `@`,
+// `/`, `?`, `#`, whitespace, or other characters is rejected.
+func isValidHost(h string) bool {
+	if strings.ContainsAny(h, "@/?# \t\r\n") {
+		return false
+	}
+	// IPv6 bracket form: [::1]:443 — strip the brackets and accept;
+	// detailed v6 syntax validation is the OS resolver's job.
+	if strings.HasPrefix(h, "[") {
+		closeIdx := strings.Index(h, "]")
+		if closeIdx < 2 { // "[]" or no closer
+			return false
+		}
+		// Allow optional ":port" tail.
+		tail := h[closeIdx+1:]
+		if tail != "" && !strings.HasPrefix(tail, ":") {
+			return false
+		}
+		return true
+	}
+	// Split host and optional port.
+	hostPart := h
+	if colon := strings.LastIndex(h, ":"); colon >= 0 {
+		hostPart = h[:colon]
+		port := h[colon+1:]
+		if port == "" {
+			return false
+		}
+		for _, r := range port {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	if hostPart == "" {
+		return false
+	}
+	// LDH labels separated by dots; empty labels (leading/trailing/
+	// consecutive dot) rejected.
+	for _, label := range strings.Split(hostPart, ".") {
+		if label == "" {
+			return false
+		}
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z':
+			case r >= 'A' && r <= 'Z':
+			case r >= '0' && r <= '9':
+			case r == '-':
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }

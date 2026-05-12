@@ -200,10 +200,46 @@ func TestNormalizeHost(t *testing.T) {
 		"http://shithub.sh/":  "shithub.sh",
 		"SHITHUB.SH":          "shithub.sh",
 		"https://SHITHUB.SH/": "shithub.sh",
+		"shithub.sh:8443":     "shithub.sh:8443",
+		"[::1]":               "[::1]",
+		"[::1]:8443":          "[::1]:8443",
 	}
 	for in, want := range cases {
 		if got := NormalizeHost(in); got != want {
 			t.Errorf("%q -> want %q got %q", in, want, got)
+		}
+	}
+}
+
+// TestNormalizeHostRejectsMalformed covers the audit #138 tightening:
+// inputs that aren't a bare host[:port] return the empty string so the
+// caller's "use default" fallback kicks in rather than carrying a
+// hostile form (userinfo, path component, internal whitespace) into
+// later URL composition.
+func TestNormalizeHostRejectsMalformed(t *testing.T) {
+	bad := []string{
+		"attacker@victim",
+		"https://attacker@victim/",
+		"shithub.sh/path",
+		"https://shithub.sh/owner/repo",
+		"shithub.sh path",
+		"shi\nthub.sh", // internal newline (TrimSpace only touches edges)
+		"shithub..sh",
+		".shithub.sh",
+		"shithub.sh.",
+		"shithub.sh:",
+		"shithub.sh:abc",
+		"sh@hub.sh:443",
+		"foo#bar",
+		"foo?baz",
+		"[::1",      // unclosed bracket
+		"[::1]junk", // tail without leading colon
+		"😀.example",
+		"",
+	}
+	for _, in := range bad {
+		if got := NormalizeHost(in); got != "" {
+			t.Errorf("expected empty rejection for %q; got %q", in, got)
 		}
 	}
 }
