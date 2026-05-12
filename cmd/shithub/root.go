@@ -19,6 +19,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
+	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
 )
 
 // longDescription is split out so help text stays readable and we can
@@ -134,4 +135,5 @@ func init() {
 	rootCmd.AddCommand(configcmd.NewCmd(f))
 	rootCmd.AddCommand(aliascmd.NewCmd(f))
 	rootCmd.AddCommand(completion.NewCmd(f))
+	rootCmd.AddCommand(repocmd.NewCmd(f))
 }
