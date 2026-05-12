@@ -106,6 +106,9 @@ func Run(ctx context.Context, opts *Options) error {
 	if err != nil {
 		return err
 	}
+	if hint := tokenShapeHint(token); hint != "" {
+		fmt.Fprintln(opts.IO.ErrOut, opts.IO.WarningIcon()+" "+hint)
+	}
 
 	client, err := opts.NewCandidateClient(host, token)
 	if err != nil {
@@ -190,6 +193,32 @@ func persist(opts *Options, host string, user api.User, token string, scopes []s
 	}
 
 	return hosts.Save()
+}
+
+// shithubPATPrefix is the expected leading marker for a v1 personal
+// access token issued by shithub server. Future token types (OAuth
+// access tokens from C04a's device-flow, fine-grained PATs) may use
+// different prefixes — this is a hint, not a hard contract.
+const shithubPATPrefix = "shithub_pat_"
+
+// tokenShapeHint returns a short stderr-suitable warning when the
+// pasted token doesn't look like a shithub PAT — typically the user
+// mistakenly pasted a GitHub token (gh_pat_/ghp_/ghu_), or only the
+// suffix without the prefix. Empty return means "the token is plausibly
+// a shithub PAT; suppress the warning." We never reject here — OAuth
+// tokens (C04a) and future PAT variants may legitimately differ, and
+// the wire validation (auth.Validate) is the authoritative gate.
+func tokenShapeHint(token string) string {
+	switch {
+	case strings.HasPrefix(token, shithubPATPrefix):
+		return ""
+	case strings.HasPrefix(token, "gh_pat_"), strings.HasPrefix(token, "ghp_"),
+		strings.HasPrefix(token, "ghu_"), strings.HasPrefix(token, "ghs_"):
+		return "this looks like a GitHub token; shithub PATs start with " + shithubPATPrefix
+	default:
+		return "token doesn't start with " + shithubPATPrefix +
+			"; continuing anyway (the server will reject if it's wrong)"
+	}
 }
 
 // anyDefault reports whether any host carries Default=true.
