@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package view
+
+import (
+	"fmt"
+
+	"github.com/tenseleyFlow/shithub-cli/internal/repos"
+)
+
+// exporter implements output.Exporter for *repos.Repo. Field names match
+// gh's `gh repo view --json …` catalog 1:1 where applicable; shithub-only
+// fields are dropped rather than renamed.
+type exporter struct{}
+
+func (exporter) Fields() []string { return exportableFields }
+
+// exportableFields is the canonical projection catalog. Order matters for
+// `--json` (no value) listings; keep alphabetical.
+var exportableFields = []string{
+	"archived",
+	"createdAt",
+	"defaultBranch",
+	"description",
+	"fork",
+	"forks",
+	"fullName",
+	"homepage",
+	"id",
+	"isPrivate",
+	"isTemplate",
+	"language",
+	"license",
+	"name",
+	"openIssues",
+	"owner",
+	"pushedAt",
+	"size",
+	"stargazers",
+	"topics",
+	"updatedAt",
+	"url",
+	"visibility",
+	"watchers",
+}
+
+// Filter projects a *repos.Repo onto the export catalog as a map. Returns
+// the whole map; the output package then narrows by user-requested fields.
+func (exporter) Filter(v any) (any, error) {
+	r, ok := v.(*repos.Repo)
+	if !ok {
+		return nil, fmt.Errorf("repo view exporter: want *repos.Repo, got %T", v)
+	}
+	license := map[string]any(nil)
+	if r.License != nil {
+		license = map[string]any{
+			"key":  r.License.Key,
+			"name": r.License.Name,
+		}
+		if r.License.SPDXID != "" {
+			license["spdxId"] = r.License.SPDXID
+		}
+	}
+	return map[string]any{
+		"archived":      r.Archived,
+		"createdAt":     r.CreatedAt,
+		"defaultBranch": r.DefaultBranch,
+		"description":   r.Description,
+		"fork":          r.Fork,
+		"forks":         r.Forks,
+		"fullName":      r.FullName,
+		"homepage":      r.Homepage,
+		"id":            r.ID,
+		"isPrivate":     r.Private,
+		"isTemplate":    r.IsTemplate,
+		"language":      r.Language,
+		"license":       license,
+		"name":          r.Name,
+		"openIssues":    r.OpenIssues,
+		"owner":         map[string]any{"login": r.Owner.Login, "type": r.Owner.Type},
+		"pushedAt":      r.PushedAt,
+		"size":          r.Size,
+		"stargazers":    r.Stargazers,
+		"topics":        r.Topics,
+		"updatedAt":     r.UpdatedAt,
+		"url":           r.HTMLURL,
+		"visibility":    visibilityField(r),
+		"watchers":      r.Watchers,
+	}, nil
+}
+
+// visibilityField normalizes the shithub envelope's two visibility hints
+// into a single string. Server always sends "public" or "private" in
+// `visibility`; the `private` boolean is the legacy alias.
+func visibilityField(r *repos.Repo) string {
+	if r.Visibility != "" {
+		return r.Visibility
+	}
+	if r.Private {
+		return "private"
+	}
+	return "public"
+}
