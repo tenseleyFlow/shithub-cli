@@ -65,7 +65,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 func Run(ctx context.Context, opts *options) error {
 	if !opts.Yes && opts.IO.IsStdinTTY() && opts.Prompter != nil {
 		confirmed, err := opts.Prompter.Confirm(
-			fmt.Sprintf("Delete variable %q?", opts.Name), false)
+			fmt.Sprintf("Delete variable %q?", opts.Name), false,
+		)
 		if err != nil {
 			return err
 		}
