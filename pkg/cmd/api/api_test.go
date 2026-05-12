@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 
@@ -80,7 +81,11 @@ func TestRunPostWithFieldsBuildsJSON(t *testing.T) {
 func TestRunPlaceholderMissingErrors(t *testing.T) {
 	opts, _ := newOpts(t)
 	opts.Endpoint = "repos/{owner}/{repo}/issues"
-	// No -R, no SHITHUB_REPO, and t.TempDir() is not a git working tree.
+	// No -R, no SHITHUB_REPO, and cwd must not be a git working tree —
+	// chdir into a fresh tempdir so resolvePlaceholders' git-remote
+	// fallback finds nothing. Without this, the test runner's own repo
+	// remote would silently fill {owner}/{repo}.
+	chdirToTempDir(t)
 	t.Setenv(EnvRepo, "")
 
 	err := Run(context.Background(), opts)
@@ -90,6 +95,22 @@ func TestRunPlaceholderMissingErrors(t *testing.T) {
 	if !strings.Contains(err.Error(), "{owner}") {
 		t.Errorf("error should name the placeholder, got: %v", err)
 	}
+}
+
+// chdirToTempDir points the process cwd at a fresh tempdir for the
+// duration of the test, restoring on cleanup. Tests that depend on
+// "no git context" rely on this.
+func chdirToTempDir(t *testing.T) {
+	t.Helper()
+	prev, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	dir := t.TempDir()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prev) })
 }
 
 func TestRunJQFilter(t *testing.T) {
