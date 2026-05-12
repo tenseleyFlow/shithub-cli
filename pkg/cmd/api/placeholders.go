@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package api
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/tenseleyFlow/shithub-cli/internal/git"
+)
+
+// EnvRepo lets users pin the {owner}/{repo} substitution out of band so
+// scripts don't need to pass `-R` on every invocation.
+const EnvRepo = "SHITHUB_REPO"
+
+// placeholderSpec captures the recognized template tokens in a path.
+// {owner}/{repo}/{branch} are gh-compatible; we keep the set small.
+type placeholderSpec struct {
+	Owner  string
+	Repo   string
+	Branch string
+}
+
+// substitute returns path with every recognized placeholder replaced by
+// the corresponding value. Missing values for placeholders that DO
+// appear in the path return an error so users see a clear "no -R or
+// SHITHUB_REPO set" message instead of a 404.
+func (s placeholderSpec) substitute(path string) (string, error) {
+	for token, value := range map[string]string{
+		"{owner}":  s.Owner,
+		"{repo}":   s.Repo,
+		"{branch}": s.Branch,
+	} {
+		if !strings.Contains(path, token) {
+			continue
+		}
+		if value == "" {
+			return "", fmt.Errorf("api: %s placeholder needs -R owner/repo or %s env", token, EnvRepo)
+		}
+		path = strings.ReplaceAll(path, token, value)
+	}
+	return path, nil
+}
+
+// resolvePlaceholders builds a placeholderSpec from the precedence chain:
+//
+//  1. --repo / -R flag (`owner/repo`).
+//  2. SHITHUB_REPO env var.
+//  3. The shithub remote of the current working tree (git remote get-url).
+//
+// `expectedHost` is the active host the api command is targeting; remote
+// URLs that don't match are ignored (gracefully) so a repo with both gh
+// and shithub remotes doesn't auto-resolve to the wrong place.
+func resolvePlaceholders(repoFlag, expectedHost string) (placeholderSpec, error) {
+	if repoFlag != "" {
+		owner, repo, err := splitRepoSpec(repoFlag)
+		if err != nil {
+			return placeholderSpec{}, err
+		}
+		return placeholderSpec{Owner: owner, Repo: repo}, nil
+	}
+	if env := os.Getenv(EnvRepo); env != "" {
+		owner, repo, err := splitRepoSpec(env)
+		if err != nil {
+			return placeholderSpec{}, err
+		}
+		return placeholderSpec{Owner: owner, Repo: repo}, nil
+	}
+	r, err := git.ResolveRemote("", "origin")
+	if err != nil {
+		// Not a git working tree (or no origin) — leave spec empty.
+		// substitute() will surface a clean error iff a placeholder
+		// actually appears in the path.
+		return placeholderSpec{}, nil //nolint:nilerr // empty spec is the correct "no info" signal
+	}
+	if expectedHost != "" && r.Host != expectedHost {
+		// The current dir's remote points elsewhere; refuse to silently
+		// guess. Empty spec means "user must pass -R if the path uses
+		// placeholders".
+		return placeholderSpec{}, nil
+	}
+	return placeholderSpec{Owner: r.Owner, Repo: r.Repo}, nil
+}
+
+// splitRepoSpec validates and splits "owner/repo".
+func splitRepoSpec(spec string) (owner, repo string, err error) {
+	parts := strings.Split(spec, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", errors.New("api: --repo must be 'owner/repo'")
+	}
+	return parts[0], parts[1], nil
+}
