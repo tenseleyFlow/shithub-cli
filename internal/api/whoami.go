@@ -4,15 +4,16 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 )
 
 // User is the minimal envelope the CLI uses for `@me` expansion and the
-// authenticated-user display name. Fields mirror the shithub /user
-// response 1:1 with gh's gh.User; we leave unused fields off to keep
-// the contract surface small.
+// authenticated-user display name. Fields mirror gh's gh.User wire shape
+// (Login is the canonical handle field); we leave unused fields off to
+// keep the contract surface small.
 type User struct {
 	ID        int64  `json:"id"`
 	Login     string `json:"login"`
@@ -21,6 +22,27 @@ type User struct {
 	AvatarURL string `json:"avatar_url,omitempty"`
 	HTMLURL   string `json:"html_url,omitempty"`
 	Type      string `json:"type,omitempty"`
+}
+
+// UnmarshalJSON accepts both `login` (gh-canonical) and `username` (the
+// field shithub server currently emits) so the CLI works across the
+// transition. Once shithub S50 §1 emits `login`, the fallback becomes
+// dead code but is harmless; we leave it for one full release cycle of
+// migration safety.
+func (u *User) UnmarshalJSON(data []byte) error {
+	type alias User // avoid infinite recursion
+	var aux struct {
+		alias
+		Username string `json:"username,omitempty"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*u = User(aux.alias)
+	if u.Login == "" && aux.Username != "" {
+		u.Login = aux.Username
+	}
+	return nil
 }
 
 // whoami caches the /user lookup so a single command invocation that
