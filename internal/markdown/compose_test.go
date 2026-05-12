@@ -50,6 +50,69 @@ func TestComposeRoundTrip(t *testing.T) {
 	}
 }
 
+// TestComposeRemovesTempDir covers audit #146: the temp dir created
+// for the editor session must be removed on every exit path — happy,
+// editor-error, and read-error. We capture the path from the
+// fakeEditor callback, then assert it's gone after Compose returns.
+func TestComposeRemovesTempDir(t *testing.T) {
+	t.Setenv("SHITHUB_EDITOR", "fake")
+	var capturedPath string
+	prev := runEditorFn
+	runEditorFn = func(_, path string) error {
+		capturedPath = path
+		return os.WriteFile(path, []byte("ok"), 0o600)
+	}
+	t.Cleanup(func() { runEditorFn = prev })
+
+	if _, err := Compose(nil, ComposeOptions{}); err != nil {
+		t.Fatalf("Compose: %v", err)
+	}
+	if capturedPath == "" {
+		t.Fatal("fakeEditor never ran; path not captured")
+	}
+	if _, err := os.Stat(capturedPath); !os.IsNotExist(err) {
+		t.Errorf("temp file should be removed; stat err=%v", err)
+	}
+	// The parent dir should also be gone.
+	parent := capturedPath[:strings.LastIndex(capturedPath, string(os.PathSeparator))]
+	if _, err := os.Stat(parent); !os.IsNotExist(err) {
+		t.Errorf("temp dir should be removed; stat err=%v", err)
+	}
+}
+
+// TestComposeRemovesTempDirOnEditorError verifies the deferred cleanup
+// fires even when the editor itself fails — easy to miss-thread the
+// defer if Compose ever switches from defer-RemoveAll to an explicit
+// cleanup tail.
+func TestComposeRemovesTempDirOnEditorError(t *testing.T) {
+	t.Setenv("SHITHUB_EDITOR", "fake")
+	var capturedPath string
+	prev := runEditorFn
+	runEditorFn = func(_, path string) error {
+		capturedPath = path
+		return errBoom
+	}
+	t.Cleanup(func() { runEditorFn = prev })
+
+	if _, err := Compose(nil, ComposeOptions{}); err == nil {
+		t.Fatal("expected editor error to bubble up")
+	}
+	if capturedPath == "" {
+		t.Fatal("fakeEditor never ran")
+	}
+	if _, err := os.Stat(capturedPath); !os.IsNotExist(err) {
+		t.Errorf("temp file should be removed despite editor error; stat err=%v", err)
+	}
+}
+
+var errBoom = newErr("compose: simulated editor failure")
+
+func newErr(s string) error { return &composeTestErr{s} }
+
+type composeTestErr struct{ msg string }
+
+func (e *composeTestErr) Error() string { return e.msg }
+
 func TestComposeRespectsTemplate(t *testing.T) {
 	t.Setenv("SHITHUB_EDITOR", "fake")
 	seed, restore := fakeEditor(t, "result")
