@@ -245,6 +245,24 @@ func NormalizeHost(host string) string {
 	return strings.ToLower(h)
 }
 
+// ValidateHost is the strict variant of NormalizeHost for user-supplied
+// `--hostname` flags. It returns the normalized form on success and an
+// explicit error when the input is empty or malformed. Callers that
+// previously did `if NormalizeHost(input) == "" { input = DefaultHost }`
+// would silently re-route a typo (`--hostname bad@host`) to the
+// default host (token-leakage risk for multi-host users); use this
+// helper at the point of input to fail fast instead. Audit #158.
+func ValidateHost(host string) (string, error) {
+	if strings.TrimSpace(host) == "" {
+		return "", fmt.Errorf("config: hostname is required")
+	}
+	normalized := NormalizeHost(host)
+	if normalized == "" {
+		return "", fmt.Errorf("config: %q is not a valid host (expected host[:port])", host)
+	}
+	return normalized, nil
+}
+
 // isValidHost reports whether h is a bare host[:port] string. We accept
 // LDH labels (letters, digits, hyphen) joined by dots, plus an optional
 // `:port` suffix, plus the IPv6 bracket form. Anything containing `@`,

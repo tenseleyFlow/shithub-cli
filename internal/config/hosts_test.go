@@ -139,6 +139,44 @@ func TestSaveAtomicNeverCorruptsFile(t *testing.T) {
 	}
 }
 
+// TestValidateHostStrict covers the audit #158 regression: callers that
+// need to distinguish "user typed garbage" from "user typed nothing" go
+// through ValidateHost. Empty input errors with a hostname-required
+// message; malformed input errors with the actual value in the message
+// so the user can see what was rejected.
+func TestValidateHostStrict(t *testing.T) {
+	t.Parallel()
+	// Empty → required-error.
+	if _, err := ValidateHost(""); err == nil {
+		t.Error("empty input should error")
+	} else if !strings.Contains(err.Error(), "required") {
+		t.Errorf("error should say required, got: %v", err)
+	}
+	if _, err := ValidateHost("   "); err == nil {
+		t.Error("whitespace-only input should error")
+	}
+	// Malformed → invalid-error with the rejected input quoted.
+	bad := []string{"attacker@victim", "host/path", "foo space", "foo..bar"}
+	for _, in := range bad {
+		if _, err := ValidateHost(in); err == nil {
+			t.Errorf("malformed %q should error", in)
+		} else if !strings.Contains(err.Error(), in) {
+			t.Errorf("error should echo input %q; got: %v", in, err)
+		}
+	}
+	// Valid → normalized string + nil.
+	for _, in := range []string{"shithub.sh", "Shithub.SH:8443", " host.local "} {
+		got, err := ValidateHost(in)
+		if err != nil {
+			t.Errorf("ValidateHost(%q) errored: %v", in, err)
+			continue
+		}
+		if got == "" {
+			t.Errorf("ValidateHost(%q) returned empty", in)
+		}
+	}
+}
+
 func TestSaveEmptyHostsRemovesFile(t *testing.T) {
 	dir := withConfigDir(t)
 
