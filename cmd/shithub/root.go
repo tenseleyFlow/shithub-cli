@@ -20,12 +20,14 @@ import (
 	browsecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/browse"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
+	gpgkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gpgkey"
 	issuecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue"
 	labelcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/label"
 	orgcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/org"
 	prcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
 	searchcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search"
+	sshkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/sshkey"
 	statuscmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/status"
 )
 
@@ -157,4 +159,6 @@ func init() {
 	rootCmd.AddCommand(searchcmd.NewCmd(f))
 	rootCmd.AddCommand(statuscmd.NewCmd(f))
 	rootCmd.AddCommand(orgcmd.NewCmd(f))
+	rootCmd.AddCommand(sshkeycmd.NewCmd(f))
+	rootCmd.AddCommand(gpgkeycmd.NewCmd(f))
 }
