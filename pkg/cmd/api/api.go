@@ -150,7 +150,14 @@ func Run(ctx context.Context, opts *Options) error {
 		return err
 	}
 
-	host := config.NormalizeHost(opts.Hostname)
+	var host string
+	if opts.Hostname != "" {
+		h, err := config.ValidateHost(opts.Hostname)
+		if err != nil {
+			return err
+		}
+		host = h
+	}
 	spec, err := resolvePlaceholders(opts.RepoFlag, host)
 	if err != nil {
 		return err

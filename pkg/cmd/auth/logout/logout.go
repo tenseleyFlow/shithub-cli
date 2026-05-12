@@ -62,8 +62,14 @@ func Run(_ context.Context, opts *Options) error {
 		return errors.New("auth: not logged in to any host")
 	}
 
-	host := config.NormalizeHost(opts.Hostname)
-	if host == "" {
+	var host string
+	if opts.Hostname != "" {
+		h, err := config.ValidateHost(opts.Hostname)
+		if err != nil {
+			return err
+		}
+		host = h
+	} else {
 		if len(hosts) > 1 {
 			return errors.New("auth: multiple hosts configured; pass --hostname <host>")
 		}

@@ -84,6 +84,16 @@ func Run(ctx context.Context, opts *Options) error {
 		return errors.New("auth: --show-token in a terminal would leak the token; re-run with output piped or use --json")
 	}
 
+	// Normalize --hostname strictly so a typo errors out instead of
+	// silently filtering every entry away (audit #158).
+	if opts.Hostname != "" {
+		h, err := config.ValidateHost(opts.Hostname)
+		if err != nil {
+			return err
+		}
+		opts.Hostname = h
+	}
+
 	rows := collect(ctx, opts, hosts)
 
 	if opts.Active {
@@ -105,7 +115,8 @@ func Run(ctx context.Context, opts *Options) error {
 func collect(ctx context.Context, opts *Options, hosts config.Hosts) []HostStatus {
 	var keys []string
 	for h := range hosts {
-		if opts.Hostname != "" && config.NormalizeHost(opts.Hostname) != h {
+		// opts.Hostname is already validated+normalized by Run.
+		if opts.Hostname != "" && opts.Hostname != h {
 			continue
 		}
 		keys = append(keys, h)

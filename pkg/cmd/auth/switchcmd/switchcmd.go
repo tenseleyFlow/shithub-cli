@@ -63,8 +63,14 @@ func Run(_ context.Context, opts *Options) error {
 		return errors.New("switch: only one host configured; nothing to switch to")
 	}
 
-	target := config.NormalizeHost(opts.Hostname)
-	if target == "" {
+	var target string
+	if opts.Hostname != "" {
+		h, err := config.ValidateHost(opts.Hostname)
+		if err != nil {
+			return fmt.Errorf("switch: %w", err)
+		}
+		target = h
+	} else {
 		picked, err := pickHostInteractive(opts, hosts)
 		if err != nil {
 			return err

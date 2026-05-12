@@ -91,9 +91,13 @@ support lands.`,
 
 // Run executes the login flow. Exposed for tests.
 func Run(ctx context.Context, opts *Options) error {
-	host := config.NormalizeHost(opts.Hostname)
-	if host == "" {
-		host = config.DefaultHost
+	host := config.DefaultHost
+	if opts.Hostname != "" {
+		h, err := config.ValidateHost(opts.Hostname)
+		if err != nil {
+			return err
+		}
+		host = h
 	}
 	if _, blocked := blockedHosts[host]; blocked {
 		return fmt.Errorf("auth: %s is not a shithub host; use the gh CLI for GitHub", host)

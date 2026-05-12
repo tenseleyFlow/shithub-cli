@@ -67,7 +67,10 @@ func getHostScoped(opts *getOptions) error {
 	if err != nil {
 		return err
 	}
-	host := config.NormalizeHost(opts.Host)
+	host, err := config.ValidateHost(opts.Host)
+	if err != nil {
+		return err
+	}
 	entry, ok := hosts[host]
 	if !ok {
 		return fmt.Errorf("config: not authenticated to %s", host)
