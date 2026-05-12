@@ -120,7 +120,7 @@ func Run(ctx context.Context, opts *Options) error {
 		return err
 	}
 
-	printSuccess(opts.IO, host, result.User.Username, result.Scopes, storageDestination(opts))
+	printSuccess(opts.IO, host, result.User.Login, result.Scopes, storageDestination(opts))
 	return nil
 }
 
@@ -156,13 +156,13 @@ func readToken(opts *Options, host string) (string, error) {
 
 // persist writes the token to keyring or hosts.yml, updates HostEntry
 // metadata, and saves Hosts.
-func persist(opts *Options, host string, user auth.User, token string, scopes []string) error {
+func persist(opts *Options, host string, user api.User, token string, scopes []string) error {
 	hosts, err := opts.Hosts()
 	if err != nil {
 		return err
 	}
 	entry := hosts.Get(host)
-	entry.User = user.Username
+	entry.User = user.Login
 	entry.LastScopes = scopes
 	if opts.GitProtocol != "" {
 		entry.GitProtocol = opts.GitProtocol
@@ -176,7 +176,7 @@ func persist(opts *Options, host string, user auth.User, token string, scopes []
 	useKeyring := !opts.InsecureStorage && ks != nil && config.KeyringAvailable(ks)
 
 	if useKeyring {
-		if err := config.SetToken(ks, host, user.Username, token); err != nil {
+		if err := config.SetToken(ks, host, user.Login, token); err != nil {
 			return fmt.Errorf("auth: keyring write failed: %w", err)
 		}
 		entry.OAuthToken = ""

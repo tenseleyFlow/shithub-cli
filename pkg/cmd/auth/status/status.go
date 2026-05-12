@@ -141,7 +141,7 @@ func collect(ctx context.Context, opts *Options, hosts config.Hosts) []HostStatu
 			out = append(out, row)
 			continue
 		}
-		row.User = result.User.Username
+		row.User = result.User.Login
 		row.Scopes = result.Scopes
 		row.Reachable = true
 		// Refresh cached scopes for the user's hosts.yml entry — best effort.
