@@ -311,7 +311,13 @@ func (c *Client) RESTRaw(ctx context.Context, method, path string, body any, opt
 		nap, shouldRetry := c.policy.shouldRetry(method, resp, transportErr, canReplay, attempt)
 		if !shouldRetry {
 			if transportErr != nil {
-				return nil, transportErr
+				// Transport errors (DNS, dial, TLS) from net/http often
+				// embed the request URL — which may carry userinfo
+				// credentials if the user pointed --hostname at a URL
+				// like https://user:token@host. Run the error through a
+				// scrub before surfacing so we never leak secrets via a
+				// crash dump or piped stderr.
+				return nil, redactErrURL(transportErr)
 			}
 			return nil, c.errorFromResponse(resp)
 		}

@@ -3,6 +3,8 @@
 package api
 
 import (
+	"errors"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -69,6 +71,36 @@ func TestRedactHeader(t *testing.T) {
 		if got := redactHeader(tc.name, tc.value); got != tc.want {
 			t.Errorf("redactHeader(%q, ...): want %q got %q", tc.name, tc.want, got)
 		}
+	}
+}
+
+// TestRedactErrURLScrubsUserinfo covers the audit #137 fix: a transport
+// error embedding `user:token@host` in its URL must not leak the
+// userinfo through Error(). A nil input round-trips to nil; a non-URL
+// error round-trips unchanged.
+func TestRedactErrURLScrubsUserinfo(t *testing.T) {
+	t.Parallel()
+
+	if got := redactErrURL(nil); got != nil {
+		t.Errorf("nil in -> got %v", got)
+	}
+
+	plain := errors.New("plain error")
+	if got := redactErrURL(plain); got.Error() != "plain error" {
+		t.Errorf("non-URL passthrough: %v", got)
+	}
+
+	wrapped := &url.Error{
+		Op:  "Get",
+		URL: "https://alice:supersecret@shithub.test/api/v1/user",
+		Err: errors.New("dial tcp: timeout"),
+	}
+	got := redactErrURL(wrapped).Error()
+	if strings.Contains(got, "supersecret") || strings.Contains(got, "alice:") {
+		t.Errorf("userinfo leaked in error: %q", got)
+	}
+	if !strings.Contains(got, "shithub.test") {
+		t.Errorf("host should still be visible for debugging: %q", got)
 	}
 }
 
