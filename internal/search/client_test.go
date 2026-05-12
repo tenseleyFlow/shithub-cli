@@ -100,6 +100,38 @@ func TestPaginationFollowsLinkHeaderAndAppliesLimit(t *testing.T) {
 	}
 }
 
+// TestPaginationHonorsLargeLimitPastDefaultMaxPages exercises the
+// audit #133 fix: a --limit value above DefaultMaxPages*PerPage must
+// not be silently clipped. We serve 31 pages of 1 item each (one more
+// than the api package's DefaultMaxPages=30 cap); without the fix the
+// walk stops at 30 items and ignores the explicit Limit=31.
+func TestPaginationHonorsLargeLimitPastDefaultMaxPages(t *testing.T) {
+	srv := fakeapi.New(t)
+	page := 0
+	const totalPages = 31
+	srv.Handle(http.MethodGet, "/api/v1/search/code", func(w http.ResponseWriter, r *http.Request) {
+		page++
+		w.Header().Set("Content-Type", "application/json")
+		if page < totalPages {
+			next := fmt.Sprintf(`<%s://%s%s?p=%d>; rel="next"`, "http", r.Host, r.URL.Path, page+1)
+			w.Header().Set("Link", next)
+		}
+		_ = json.NewEncoder(w).Encode(Response[CodeItem]{
+			TotalCount: totalPages,
+			Items:      []CodeItem{{Name: fmt.Sprintf("p%d.go", page)}},
+		})
+	})
+
+	c := NewClient(srv.NewClient())
+	out, err := c.Code(context.Background(), "TODO", Options{Limit: totalPages})
+	if err != nil {
+		t.Fatalf("Code: %v", err)
+	}
+	if len(out.Items) != totalPages {
+		t.Errorf("expected %d items past DefaultMaxPages cap, got %d", totalPages, len(out.Items))
+	}
+}
+
 func TestPerPageClamp(t *testing.T) {
 	srv := fakeapi.New(t)
 	var got string

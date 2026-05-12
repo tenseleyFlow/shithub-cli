@@ -93,7 +93,8 @@ func paginate[T any](
 	merged := &Response[T]{}
 	first := true
 	collected := 0
-	for raw, err := range c.api.DoPaginated(ctx, http.MethodGet, path) {
+	reqOpts := paginateOpts(opts)
+	for raw, err := range c.api.DoPaginated(ctx, http.MethodGet, path, reqOpts...) {
 		if err != nil {
 			return nil, err
 		}
@@ -119,6 +120,23 @@ func paginate[T any](
 		}
 	}
 	return merged, nil
+}
+
+// paginateOpts derives the page-cap to pass to api.DoPaginated from the
+// caller's Limit. Without this, the api package's default 30-page cap
+// would silently clip large --limit values (e.g., --limit 5000 caps at
+// ~3000 items when PerPage=100). When the user has explicitly set
+// Limit, we pass WithMaxPages(-1) to disable the page-cap entirely and
+// rely on the per-item `collected >= opts.Limit` check in paginate() as
+// the authoritative stop. The risk of an unbounded walk on a runaway
+// server is contained: Limit is the hard ceiling on items returned,
+// and DoPaginated still stops when the server runs out of Link `next`
+// headers.
+func paginateOpts(opts Options) []api.RequestOption {
+	if opts.Limit <= 0 {
+		return nil // fall through to api.DefaultMaxPages
+	}
+	return []api.RequestOption{api.WithMaxPages(-1)}
 }
 
 // encodeQuery composes the query string. The user's full-text `query`
