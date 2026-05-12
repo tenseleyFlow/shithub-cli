@@ -162,12 +162,12 @@ func TestIsSensitiveCacheHeader(t *testing.T) {
 }
 
 func TestCacheDirUnderConfigDir(t *testing.T) {
-	t.Setenv(config.EnvConfigDir, "/tmp/sh")
+	t.Setenv(config.EnvConfigDir, filepath.Join(t.TempDir(), "sh"))
 	got, err := CacheDir()
 	if err != nil {
 		t.Fatalf("CacheDir: %v", err)
 	}
-	if !strings.HasSuffix(got, "/cache/api") {
-		t.Errorf("CacheDir path: %q", got)
+	if want := filepath.Join("cache", "api"); !strings.HasSuffix(got, want) {
+		t.Errorf("CacheDir path: want suffix %q, got %q", want, got)
 	}
 }
