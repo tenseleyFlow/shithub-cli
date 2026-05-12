@@ -8,7 +8,6 @@ package clone
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -142,10 +141,6 @@ func Run(ctx context.Context, opts *options) error {
 		}
 	}
 
-	if !opts.IO.IsStderrTTY() {
-		// Quiet a stderr line so scripts don't see chatter beyond git's own.
-		_ = io.Discard
-	}
 	return nil
 }
 
