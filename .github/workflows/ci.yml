@@ -44,7 +44,7 @@ jobs:
         # which is built with Go 1.24 and refuses our toolchain.
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.latest
+          version: v2.12.2
           args: --timeout=5m
 
       - name: Run make ci
