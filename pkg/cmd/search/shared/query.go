@@ -60,12 +60,15 @@ func BoolQualifier(key string, b *bool) Qualifier {
 }
 
 // formatQualifier quotes the value when needed so the server's tokenizer
-// keeps the right boundaries. We only quote on whitespace — gh treats
-// `label:"good first issue"` as one qualifier and that's the form
-// callers paste from issue trackers.
+// keeps the right boundaries. We quote on whitespace, and we backslash-
+// escape any embedded double-quote so values like `has "quotes"` don't
+// produce a broken `label:"has "quotes""` qualifier that the server's
+// FTS parser would reject (or worse, mis-parse). gh's qualifier syntax
+// uses the same `\"` escape; documented in audit #149.
 func formatQualifier(k, v string) string {
 	if strings.ContainsAny(v, " \t") {
-		return fmt.Sprintf(`%s:"%s"`, k, v)
+		escaped := strings.ReplaceAll(v, `"`, `\"`)
+		return fmt.Sprintf(`%s:"%s"`, k, escaped)
 	}
 	return fmt.Sprintf("%s:%s", k, v)
 }

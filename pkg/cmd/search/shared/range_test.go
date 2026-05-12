@@ -97,6 +97,18 @@ func TestComposeQueryQuotesWhitespace(t *testing.T) {
 	}
 }
 
+// TestComposeQueryEscapesInnerQuotes covers audit #149: a qualifier
+// value with whitespace AND embedded double-quotes must escape the
+// inner quotes so the server's tokenizer sees one qualifier, not three
+// half-broken tokens.
+func TestComposeQueryEscapesInnerQuotes(t *testing.T) {
+	got := ComposeQuery("", Qualifier{Key: "label", Value: `has "quotes" here`})
+	want := `label:"has \"quotes\" here"`
+	if got != want {
+		t.Errorf("got %q; want %q", got, want)
+	}
+}
+
 func TestComposeQuerySkipsEmpty(t *testing.T) {
 	got := ComposeQuery("", Qualifier{Key: "stars", Value: ">10"}, Qualifier{Key: "", Value: "x"}, Qualifier{Key: "x", Value: ""})
 	want := "stars:>10"
