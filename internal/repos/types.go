@@ -54,6 +54,9 @@ type Repo struct {
 	HasDiscussions      bool `json:"has_discussions,omitempty"`
 	AllowForking        bool `json:"allow_forking,omitempty"`
 	AllowUpdateBranch   bool `json:"allow_update_branch,omitempty"`
+	AllowMergeCommit    bool `json:"allow_merge_commit,omitempty"`
+	AllowSquashMerge    bool `json:"allow_squash_merge,omitempty"`
+	AllowRebaseMerge    bool `json:"allow_rebase_merge,omitempty"`
 	IsTemplate          bool `json:"is_template,omitempty"`
 	DeleteBranchOnMerge bool `json:"delete_branch_on_merge,omitempty"`
 }
