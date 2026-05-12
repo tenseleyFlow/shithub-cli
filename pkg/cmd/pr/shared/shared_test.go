@@ -113,7 +113,8 @@ func TestNewPRWebURLEncodesAndDrafts(t *testing.T) {
 }
 
 func TestFillStandard(t *testing.T) {
-	r, dir := mkRepoWithCommits(t,
+	r, dir := mkRepoWithCommits(
+		t,
 		[]string{"first subject\n\nfirst body"},
 		[]string{"second subject"},
 		[]string{"third subject"},
@@ -132,7 +133,8 @@ func TestFillStandard(t *testing.T) {
 }
 
 func TestFillFirst(t *testing.T) {
-	r, dir := mkRepoWithCommits(t,
+	r, dir := mkRepoWithCommits(
+		t,
 		[]string{"first subject\n\nfirst body line"},
 		[]string{"second"},
 	)
@@ -153,7 +155,8 @@ func TestFillFirst(t *testing.T) {
 }
 
 func TestFillVerboseConcatenates(t *testing.T) {
-	r, dir := mkRepoWithCommits(t,
+	r, dir := mkRepoWithCommits(
+		t,
 		[]string{"a-sub\n\na-body"},
 		[]string{"b-sub\n\nb-body"},
 	)
