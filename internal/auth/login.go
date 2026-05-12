@@ -39,7 +39,7 @@ func NewCandidateClient(host, token string) (*api.Client, error) {
 		TokenFunc: func(_ context.Context, _ string) (string, string, error) {
 			return token, "candidate", nil
 		},
-		MaxRetries: 1,
+		MaxRetries: api.IntPtr(1),
 	})
 }
 

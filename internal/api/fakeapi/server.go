@@ -83,7 +83,7 @@ func (s *Server) NewClientWithToken(token string) *api.Client {
 		TokenFunc: func(ctx context.Context, host string) (string, string, error) {
 			return token, "test", nil
 		},
-		MaxRetries: 1,             // keep tests snappy; raise per-test if needed
+		MaxRetries: api.IntPtr(1), // keep tests snappy; raise per-test if needed
 		Timeout:    5_000_000_000, // 5s
 		// HTTPClient defaults to one with the right timeout; the httptest
 		// server is reachable via the default transport.
