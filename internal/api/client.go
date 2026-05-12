@@ -363,17 +363,18 @@ func (c *Client) DoPaginated(ctx context.Context, method, path string, opts ...R
 				return
 			}
 
-			var (
-				resp *http.Response
-				err  error
-			)
-			if nextURL == "" {
-				// First page: build via composeURL like a normal call.
-				resp, err = c.RESTRaw(ctx, method, path, nil, opts...)
-			} else {
-				// Subsequent pages: the Link URL is already absolute; bypass composeURL.
-				resp, err = c.doRaw(ctx, method, nextURL, nil, o)
+			// First page builds the URL via composeURL; subsequent pages
+			// have an absolute Link `next` URL which composeURL passes
+			// through unchanged. Routing both through RESTRaw means
+			// retries + backoff apply uniformly — earlier sprints used
+			// the bare doRaw for pages 2+, which silently dropped the
+			// retry policy and failed the whole walk on any transient
+			// 5xx past page 1.
+			target := path
+			if nextURL != "" {
+				target = nextURL
 			}
+			resp, err := c.RESTRaw(ctx, method, target, nil, opts...)
 			if err != nil {
 				yield(nil, err)
 				return
@@ -397,42 +398,6 @@ func (c *Client) DoPaginated(ctx context.Context, method, path string, opts ...R
 			}
 		}
 	}
-}
-
-// doRaw is the "URL is already absolute" variant used by pagination for
-// pages beyond the first. Shares header/auth wiring with RESTRaw but
-// skips composeURL.
-func (c *Client) doRaw(ctx context.Context, method, target string, body any, o requestOptions) (*http.Response, error) {
-	bodyBytes, _, _, err := prepareBody(body)
-	if err != nil {
-		return nil, err
-	}
-	token, _, err := c.tokenFunc(ctx, c.host)
-	if err != nil {
-		return nil, err
-	}
-	requestID := uuid.NewString()
-
-	var reqBody io.Reader
-	if bodyBytes != nil {
-		reqBody = bytes.NewReader(bodyBytes)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, target, reqBody)
-	if err != nil {
-		return nil, err
-	}
-	c.applyHeaders(req, &o, token, requestID, bodyBytes != nil)
-
-	start := time.Now()
-	resp, transportErr := c.http.Do(req)
-	c.logRequest(method, target, resp, transportErr, start, requestID)
-	if transportErr != nil {
-		return nil, transportErr
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, c.errorFromResponse(resp)
-	}
-	return resp, nil
 }
 
 // composeURL resolves placeholders, prefixes /api/v1 when needed, and
