@@ -35,9 +35,10 @@ const ShellPrefix = "!"
 
 // reservedNames is the set of built-in top-level commands an alias may
 // not shadow. Built-ins are checked dynamically by callers (they pass
-// the current cobra command tree), but a baseline set lives here so
-// internal/alias's tests can exercise the rule without spinning up the
-// whole command tree.
+// the current cobra command tree via extraReserved), but this static
+// list is the safety net used by internal/alias's own tests and by any
+// future caller that forgets to pass extraReserved. Keep in lockstep
+// with the verbs registered on cmd/shithub/root.go.
 var reservedNames = map[string]struct{}{
 	"help":       {},
 	"version":    {},
@@ -46,6 +47,14 @@ var reservedNames = map[string]struct{}{
 	"auth":       {},
 	"api":        {},
 	"config":     {},
+	"repo":       {},
+	"issue":      {},
+	"pr":         {},
+	"label":      {},
+	"browse":     {},
+	"search":     {},
+	"status":     {},
+	"org":        {},
 }
 
 // Validate returns nil iff name is a legal alias name and not reserved.
