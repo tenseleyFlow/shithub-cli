@@ -21,6 +21,7 @@ import (
 	cachecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/cache"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
+	gistcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gist"
 	gpgkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gpgkey"
 	issuecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue"
 	labelcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/label"
@@ -173,4 +174,5 @@ func init() {
 	rootCmd.AddCommand(cachecmd.NewCmd(f))
 	rootCmd.AddCommand(secretcmd.NewCmd(f))
 	rootCmd.AddCommand(variablecmd.NewCmd(f))
+	rootCmd.AddCommand(gistcmd.NewCmd(f))
 }
