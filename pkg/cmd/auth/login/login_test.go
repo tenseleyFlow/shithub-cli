@@ -70,6 +70,59 @@ func TestLoginWithTokenHappyPath(t *testing.T) {
 	}
 }
 
+// TestLoginWarnsOnGitHubTokenShape covers the audit #136 hint: pasting
+// a `gh_pat_…` / `ghp_…` token surfaces a stderr warning *before* the
+// server roundtrip, sparing the user a confusing 401.
+func TestLoginWarnsOnGitHubTokenShape(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Hostname = "shithub.sh"
+	opts.WithToken = true
+	opts.InsecureStorage = true
+	tf.In.WriteString("ghp_abcdef\n")
+	tf.Server.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1, "username": "mf"})
+
+	_ = Run(context.Background(), opts)
+	if !strings.Contains(tf.ErrOut.String(), "looks like a GitHub token") {
+		t.Errorf("expected GitHub-shape warning; got %q", tf.ErrOut.String())
+	}
+}
+
+// TestLoginWarnsOnUnknownPrefix: any token without the shithub_pat_
+// prefix gets a soft warning. The flow continues so OAuth tokens (C04a)
+// still work when the server starts emitting them.
+func TestLoginWarnsOnUnknownPrefix(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Hostname = "shithub.sh"
+	opts.WithToken = true
+	opts.InsecureStorage = true
+	tf.In.WriteString("random_xyz\n")
+	tf.Server.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1, "username": "mf"})
+
+	_ = Run(context.Background(), opts)
+	if !strings.Contains(tf.ErrOut.String(), "doesn't start with shithub_pat_") {
+		t.Errorf("expected unknown-prefix warning; got %q", tf.ErrOut.String())
+	}
+}
+
+// TestLoginSuppressesWarningOnShithubPAT: the canonical shape doesn't
+// produce the warning, so `auth login` stays quiet in the happy path.
+func TestLoginSuppressesWarningOnShithubPAT(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Hostname = "shithub.sh"
+	opts.WithToken = true
+	opts.InsecureStorage = true
+	tf.In.WriteString("shithub_pat_abcdef\n")
+	tf.Server.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1, "username": "mf"})
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if strings.Contains(tf.ErrOut.String(), "doesn't start with") ||
+		strings.Contains(tf.ErrOut.String(), "looks like a GitHub token") {
+		t.Errorf("unexpected token-shape warning on canonical PAT: %q", tf.ErrOut.String())
+	}
+}
+
 func TestLoginWithTokenStoresInKeyring(t *testing.T) {
 	opts, tf := newOpts(t)
 	opts.Hostname = "shithub.sh"
