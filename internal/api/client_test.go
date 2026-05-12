@@ -387,6 +387,71 @@ func TestDoPaginatedRespectsMaxPages(t *testing.T) {
 	}
 }
 
+// TestDoPaginatedRetriesOnLaterPages covers the audit #134 fix: a
+// transient 5xx on page 2 (or any subsequent page) must be retried, not
+// surface as a walk-terminating error. The earlier impl routed page 1
+// through RESTRaw (with retries) but pages 2+ through doRaw (no
+// retries), failing the whole walk on the first hiccup mid-stream.
+func TestDoPaginatedRetriesOnLaterPages(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.RawQuery {
+		case "":
+			// Page 1: succeed, advertise page 2.
+			w.Header().Set("Link", fmt.Sprintf(`<%s%s?p=2>; rel="next"`, "http://"+r.Host, r.URL.Path))
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`[{"id":1}]`))
+		case "p=2":
+			// Page 2: succeed, advertise page 3.
+			w.Header().Set("Link", fmt.Sprintf(`<%s%s?p=3>; rel="next"`, "http://"+r.Host, r.URL.Path))
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`[{"id":2}]`))
+		case "p=3":
+			// Page 3 is flaky: first attempt fails 502, second succeeds.
+			if hits.flaky.Add(1) < 2 {
+				w.WriteHeader(502)
+				return
+			}
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`[{"id":3}]`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv(api.EnvInsecureHTTP, "1")
+
+	c, err := api.NewClient(api.ClientOptions{
+		BaseURL:    srv.URL,
+		TokenFunc:  func(_ context.Context, _ string) (string, string, error) { return "t", "test", nil },
+		MaxRetries: api.IntPtr(2),
+		Timeout:    2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	var ids []int
+	for raw, err := range c.DoPaginated(context.Background(), "GET", "/things") {
+		if err != nil {
+			t.Fatalf("DoPaginated: %v", err)
+		}
+		var batch []map[string]int
+		_ = json.Unmarshal(raw, &batch)
+		for _, b := range batch {
+			ids = append(ids, b["id"])
+		}
+	}
+	if len(ids) != 3 || ids[0] != 1 || ids[1] != 2 || ids[2] != 3 {
+		t.Errorf("expected ids 1,2,3 across 3 pages with retry on page 3; got %v", ids)
+	}
+}
+
+// hits is shared counter scaffolding for TestDoPaginatedRetriesOnLaterPages
+// — defined at package scope so the handler closure can increment it
+// without juggling a wrapper struct.
+var hits struct {
+	flaky atomic.Int32
+}
+
 // Insecure-http guard ----------------------------------------------------
 
 func TestRejectsHTTPWithoutEscape(t *testing.T) {
