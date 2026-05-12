@@ -1,0 +1,35 @@
+# Build artifacts
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+profile.*
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+
+# Private planning, references, agent state
+.docs/
+.refs/
+.claude/
+AGENTS.md
+
+# Generated docs (mdBook output)
+/docs/book/
+
+# Go module cache (if vendored)
+/vendor/
+
+# Goreleaser snapshot output (covered by /dist but explicit)
+/dist-snapshot/
