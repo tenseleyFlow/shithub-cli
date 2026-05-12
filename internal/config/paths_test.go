@@ -105,32 +105,34 @@ func TestConfigDirHomeUnset(t *testing.T) {
 }
 
 // TestPathsRelativeToConfigDir verifies ConfigFile, HostsFile, CacheDir
-// all derive from the same root.
+// all derive from the same root. Uses filepath.Join for the expected
+// values so the assertion holds on Windows (backslash separator) too.
 func TestPathsRelativeToConfigDir(t *testing.T) {
-	t.Setenv(EnvConfigDir, "/tmp/sh-test")
+	root := filepath.Join(t.TempDir(), "sh-test")
+	t.Setenv(EnvConfigDir, root)
 
 	cfg, err := ConfigFile()
 	if err != nil {
 		t.Fatalf("ConfigFile: %v", err)
 	}
-	if cfg != "/tmp/sh-test/config.yml" {
-		t.Errorf("ConfigFile: got %q", cfg)
+	if want := filepath.Join(root, "config.yml"); cfg != want {
+		t.Errorf("ConfigFile: want %q got %q", want, cfg)
 	}
 
 	hosts, err := HostsFile()
 	if err != nil {
 		t.Fatalf("HostsFile: %v", err)
 	}
-	if hosts != "/tmp/sh-test/hosts.yml" {
-		t.Errorf("HostsFile: got %q", hosts)
+	if want := filepath.Join(root, "hosts.yml"); hosts != want {
+		t.Errorf("HostsFile: want %q got %q", want, hosts)
 	}
 
 	cache, err := CacheDir()
 	if err != nil {
 		t.Fatalf("CacheDir: %v", err)
 	}
-	if cache != "/tmp/sh-test/cache" {
-		t.Errorf("CacheDir: got %q", cache)
+	if want := filepath.Join(root, "cache"); cache != want {
+		t.Errorf("CacheDir: want %q got %q", want, cache)
 	}
 }
 
