@@ -12,6 +12,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
+	apicmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/api"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 )
 
@@ -68,4 +69,5 @@ func init() {
 	f.IOStreams = ios
 
 	rootCmd.AddCommand(auth.NewCmd(f))
+	rootCmd.AddCommand(apicmd.NewCmd(f))
 }
