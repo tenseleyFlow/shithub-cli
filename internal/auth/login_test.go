@@ -31,8 +31,10 @@ func TestValidateHappyPath(t *testing.T) {
 		t.Fatalf("Validate: %v", err)
 	}
 
-	if got.User.Username != "mf" {
-		t.Errorf("Username: got %q", got.User.Username)
+	// Server emits `username` today (pre-S50-§1); api.User.UnmarshalJSON
+	// promotes it into Login so the canonical handle field is populated.
+	if got.User.Login != "mf" {
+		t.Errorf("Login: got %q", got.User.Login)
 	}
 	if len(got.Scopes) != 2 {
 		t.Fatalf("Scopes: want 2 got %d (%v)", len(got.Scopes), got.Scopes)
@@ -77,17 +79,39 @@ func TestValidateScopesMissingHeader(t *testing.T) {
 	}
 }
 
-func TestValidateRejectsEmptyUsername(t *testing.T) {
+func TestValidateRejectsEmptyLogin(t *testing.T) {
 	srv := fakeapi.New(t)
 	srv.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1})
 
 	client := srv.NewClientWithToken("shithub_pat_abc")
 	_, err := auth.Validate(context.Background(), client)
 	if err == nil {
-		t.Fatal("expected error on empty username")
+		t.Fatal("expected error on empty login")
 	}
-	if !strings.Contains(err.Error(), "empty username") {
-		t.Errorf("error should mention empty username, got: %v", err)
+	if !strings.Contains(err.Error(), "empty login") {
+		t.Errorf("error should mention empty login, got: %v", err)
+	}
+}
+
+// TestValidateAcceptsCanonicalLogin verifies the gh-canonical `login`
+// field is decoded directly. Once shithub S50 §1 lands, the server emits
+// this shape and the `username` fallback in api.User.UnmarshalJSON
+// becomes dead-but-harmless.
+func TestValidateAcceptsCanonicalLogin(t *testing.T) {
+	srv := fakeapi.New(t)
+	srv.Handle("GET", "/api/v1/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"id":1,"login":"mf","name":"M F"}`))
+	})
+
+	client := srv.NewClientWithToken("shithub_pat_abc")
+	got, err := auth.Validate(context.Background(), client)
+	if err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if got.User.Login != "mf" {
+		t.Errorf("Login: got %q", got.User.Login)
 	}
 }
 

@@ -16,21 +16,16 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/api"
 )
 
-// User is the trimmed shape we need from GET /api/v1/user. Fields we
-// don't consume are deliberately omitted so tests don't fixate on
-// unrelated server quirks.
-type User struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email,omitempty"`
-}
-
-// ValidationResult is what Validate returns on success: the username the
-// server agrees the token belongs to, plus the OAuth scopes the server
-// reports via the X-OAuth-Scopes header (empty when the server doesn't
-// advertise — pre S50 §1 servers, and as graceful degradation).
+// ValidationResult is what Validate returns on success: the user envelope
+// the server agrees the token belongs to, plus the OAuth scopes the
+// server reports via the X-OAuth-Scopes header (empty when the server
+// doesn't advertise — pre S50 §1 servers, and as graceful degradation).
+//
+// User reuses api.User so the CLI has a single decoder for /api/v1/user
+// — earlier sprints had a parallel auth.User type that read a different
+// JSON field name; collapsing them prevents silent drift.
 type ValidationResult struct {
-	User   User
+	User   api.User
 	Scopes []string
 }
 
@@ -76,14 +71,16 @@ func Validate(ctx context.Context, client *api.Client) (*ValidationResult, error
 	return &ValidationResult{User: user, Scopes: scopes}, nil
 }
 
-// decodeUser parses the validated /api/v1/user response.
-func decodeUser(resp *http.Response) (User, error) {
-	var u User
+// decodeUser parses the validated /api/v1/user response. api.User's
+// UnmarshalJSON accepts both `login` (gh-canonical) and `username`
+// (shithub's current wire shape) so this works across the S50 transition.
+func decodeUser(resp *http.Response) (api.User, error) {
+	var u api.User
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
-		return User{}, fmt.Errorf("auth: decode /user: %w", err)
+		return api.User{}, fmt.Errorf("auth: decode /user: %w", err)
 	}
-	if u.Username == "" {
-		return User{}, fmt.Errorf("auth: /user returned empty username")
+	if u.Login == "" {
+		return api.User{}, fmt.Errorf("auth: /user returned empty login")
 	}
 	return u, nil
 }
