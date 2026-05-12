@@ -213,7 +213,10 @@ func Run(ctx context.Context, opts *options) error {
 
 // chooseStrategy returns the merge method to use. Explicit flag wins;
 // otherwise read the repo's `allow_*_merge` settings and pick the first
-// allowed (merge → squash → rebase, matching gh's preference order).
+// allowed in gh's preference order (merge → squash → rebase). When the
+// server doesn't echo any of the flags (pre-S50 §4, or older shithub
+// builds) every field is the zero value and we fall back to plain merge
+// — the same behavior as gh against a repo that omits the fields.
 func chooseStrategy(ctx context.Context, opts *options, client *api.Client, ref prshared.PRRef) (pulls.MergeMethod, error) {
 	switch {
 	case opts.Merge:
@@ -229,10 +232,15 @@ func chooseStrategy(ctx context.Context, opts *options, client *api.Client, ref 
 		// Default to plain merge if we can't read the repo settings.
 		return pulls.MergeMerge, nil //nolint:nilerr // fall-through is intentional
 	}
-	// repos.Repo doesn't expose AllowMergeCommit/etc. fields today, so
-	// the default is gh's default ("merge"). When the repo type grows
-	// those flags, swap in the preference walk here.
-	_ = repo
+	switch {
+	case repo.AllowMergeCommit:
+		return pulls.MergeMerge, nil
+	case repo.AllowSquashMerge:
+		return pulls.MergeSquash, nil
+	case repo.AllowRebaseMerge:
+		return pulls.MergeRebase, nil
+	}
+	// All flags zero — server didn't advertise. Default to plain merge.
 	return pulls.MergeMerge, nil
 }
 
