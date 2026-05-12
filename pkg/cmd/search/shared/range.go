@@ -100,8 +100,18 @@ func ParseRange(s string) (Range, error) {
 	return Range{HasLower: true, HasUpper: true, Lower: n, Upper: n}, nil
 }
 
-// String renders Range as the canonical qualifier value. Empty Range
-// yields the empty string so callers can skip it without a branch.
+// String renders Range as the canonical qualifier value. The output is
+// semantically equivalent to the input that produced this Range but is
+// NOT guaranteed to be byte-equal — exclusive bounds (`>N`, `<N`) are
+// canonicalized to their inclusive form (`>=N+1`, `<=N-1`) since that's
+// what the parsed Range actually represents. Round-trip example:
+//
+//	ParseRange(">10")  → Range{Lower: 11}   → String() → ">=11"
+//	ParseRange("<10")  → Range{Upper:  9}   → String() →  "<=9"
+//	ParseRange("10..20") → Range{...}       → String() → "10..20"  (preserved)
+//
+// Empty Range yields the empty string so callers can skip it without a
+// branch. Documented in audit #148.
 func (r Range) String() string {
 	switch {
 	case !r.HasLower && !r.HasUpper:

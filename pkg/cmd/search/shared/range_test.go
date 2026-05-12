@@ -58,6 +58,37 @@ func TestRangeString(t *testing.T) {
 	}
 }
 
+// TestRangeRoundTripCanonicalization locks in the audit #148 decision:
+// exclusive bounds (`>N`, `<N`) round-trip into their inclusive form
+// rather than back to the original string. Anyone tempted to "fix" this
+// must update the doc comment and this test together.
+func TestRangeRoundTripCanonicalization(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{">10", ">=11"},
+		{"<10", "<=9"},
+		{">=10", ">=10"},
+		{"<=10", "<=10"},
+		{"10", "10"},
+		{"10..20", "10..20"},
+		{"*..10", "<=10"},
+		{"10..*", ">=10"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			r, err := ParseRange(tc.in)
+			if err != nil {
+				t.Fatalf("ParseRange(%q): %v", tc.in, err)
+			}
+			if got := r.String(); got != tc.want {
+				t.Errorf("ParseRange(%q).String() = %q; want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestComposeQueryQuotesWhitespace(t *testing.T) {
 	got := ComposeQuery("octocat", Qualifier{Key: "label", Value: "good first issue"})
 	want := `octocat label:"good first issue"`
