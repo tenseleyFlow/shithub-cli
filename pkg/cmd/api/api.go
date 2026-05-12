@@ -131,7 +131,7 @@ array bodies; --slurp wraps pages in an outer array.`,
 	cmd.Flags().BoolVar(&opts.Slurp, "slurp", false, "with --paginate, wrap pages in an outer JSON array instead of concatenating")
 	cmd.Flags().StringVarP(&opts.JQ, "jq", "q", "", "filter the JSON response through a jq expression")
 	cmd.Flags().StringVarP(&opts.Template, "template", "t", "", "format the JSON response with a Go template")
-	cmd.Flags().StringVar(&opts.Cache, "cache", "", "cache GET responses on disk for the given duration (e.g. 1h)")
+	cmd.Flags().StringVar(&opts.Cache, "cache", "", "cache GET responses on disk for the given duration (e.g. 1h); ignored for non-GET methods with a warning")
 	cmd.Flags().BoolVarP(&opts.IncludeHeaders, "include", "i", false, "include the response headers in the output")
 	cmd.Flags().BoolVar(&opts.Silent, "silent", false, "suppress the response body (useful with --include)")
 	cmd.Flags().BoolVar(&opts.Verbose, "verbose", false, "print request and response to stderr (token-redacted)")
@@ -278,6 +278,15 @@ func buildHeaders(opts *Options, isJSONBody bool) (http.Header, error) {
 func runSingle(ctx context.Context, opts *Options, client *api.Client, method, endpoint string, headers http.Header, body []byte) error {
 	cacheTTL, _ := parseCacheTTL(opts.Cache)
 	cacheKey := ""
+
+	// --cache is GET-only by design (mutating methods aren't cacheable
+	// in any meaningful sense). Warn loudly when the combination is
+	// nonsensical rather than silently dropping the cache — users hit
+	// this when they paste an existing GET command and add -X PUT.
+	// Audit #150.
+	if cacheTTL > 0 && !strings.EqualFold(method, http.MethodGet) {
+		fmt.Fprintf(opts.IO.ErrOut, "warning: --cache only applies to GET; ignoring for %s\n", method)
+	}
 
 	// Cache lookup (GET only).
 	if cacheTTL > 0 && strings.EqualFold(method, http.MethodGet) {

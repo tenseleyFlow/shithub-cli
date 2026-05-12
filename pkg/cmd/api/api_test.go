@@ -265,6 +265,26 @@ func TestRunCacheRoundTrip(t *testing.T) {
 	}
 }
 
+// TestRunCacheWarnsOnNonGet covers audit #150: pasting --cache onto a
+// non-GET request previously dropped the cache silently. We now emit
+// a stderr warning so the user knows their flag wasn't effective.
+func TestRunCacheWarnsOnNonGet(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "repos"
+	opts.Method = http.MethodPost
+	opts.Cache = "1h"
+	opts.RawFields = []string{"name=hello"}
+
+	tf.Server.RegisterJSON(http.MethodPost, "/api/v1/repos", 201, map[string]any{"ok": true})
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(tf.ErrOut.String(), "--cache only applies to GET") {
+		t.Errorf("expected non-GET cache warning; got %q", tf.ErrOut.String())
+	}
+}
+
 func TestRunSlurpRequiresPaginate(t *testing.T) {
 	opts, _ := newOpts(t)
 	opts.Endpoint = "u"
