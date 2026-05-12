@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/build"
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
+	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
+	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 )
 
 // longDescription is split out so help text stays readable and we can
@@ -47,4 +51,21 @@ func init() {
 	// Match gh's "shithub <ver> (...) built ..." shape for --version.
 	rootCmd.SetVersionTemplate("shithub {{.Version}}\n")
 	rootCmd.AddCommand(versionCmd)
+
+	// Build the production cmdutil.Factory once at startup. A construction
+	// failure means our config substrate is broken at a level no command
+	// can recover from; surface it via stderr and exit non-zero before any
+	// subcommand has a chance to swallow it.
+	ios := iostreams.System()
+	p := prompter.NewSurvey(ios)
+	f, err := cmdutil.New(p)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "shithub: factory init:", err)
+		os.Exit(1)
+	}
+	// The system IOStreams instance is what we built the factory with;
+	// reach back into the field so anything else needing it stays in sync.
+	f.IOStreams = ios
+
+	rootCmd.AddCommand(auth.NewCmd(f))
 }
