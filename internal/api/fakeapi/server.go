@@ -8,6 +8,7 @@
 package fakeapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -150,22 +151,8 @@ func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reinstall the body for the handler, since dispatch consumed it.
-	r.Body = io.NopCloser(bytesReader(body))
+	r.Body = io.NopCloser(bytes.NewReader(body))
 	handler(w, r)
-}
-
-// bytesReader is the simplest way to create an io.Reader from []byte that
-// also implements Seek, without dragging in bytes.NewReader (which would
-// still work — this is just a marginal allocation saving on the fake's
-// hot path).
-type bytesReader []byte
-
-func (b bytesReader) Read(p []byte) (int, error) {
-	if len(b) == 0 {
-		return 0, io.EOF
-	}
-	n := copy(p, b)
-	return n, nil
 }
 
 // Calls returns a snapshot of every recorded inbound request. The slice
