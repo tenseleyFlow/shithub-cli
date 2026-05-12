@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
@@ -165,5 +167,47 @@ func TestForkCloneWithUpstream(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected a cloned subdir with upstream remote pointing at %q", parentSrc)
+	}
+}
+
+// TestForkWaitsForReadiness covers the audit #144 fix: after the fork
+// POST returns, the command polls View(fork) until the server's
+// background storage-provisioning job materializes the row. We register
+// a View handler that 404s the first two probes and 200s the third —
+// then assert the command finished successfully and the probe ran more
+// than once.
+func TestForkWaitsForReadiness(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodPost, "/api/v1/repos/octo/hello/forks", 202, repos.Repo{
+		Name: "hello", FullName: "me/hello", Owner: repos.Owner{Login: "me"},
+		DefaultBranch: "trunk", Fork: true,
+	})
+	var probes atomic.Int32
+	tf.Server.Handle(http.MethodGet, "/api/v1/repos/me/hello", func(w http.ResponseWriter, _ *http.Request) {
+		n := probes.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if n < 3 {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not yet"}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(repos.Repo{Name: "hello", FullName: "me/hello"})
+	})
+
+	opts := &options{
+		IO:           tf.IOStreams,
+		Prompter:     tf.Prompt,
+		HTTPClient:   tf.Factory.HTTPClient,
+		DefaultHost:  tf.Factory.DefaultHost,
+		GitProtocol:  tf.Factory.GitProtocol,
+		RepoArg:      "octo/hello",
+		RemoteName:   "origin",
+		PollInterval: 1 * time.Millisecond,
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := probes.Load(); got != 3 {
+		t.Errorf("expected 3 readiness probes (2 x 404 + 1 x 200), got %d", got)
 	}
 }

@@ -45,7 +45,10 @@ type options struct {
 	DefaultBranchOnly bool
 
 	// PollInterval throttles the wait loop after creating a fork until
-	// the server reports the new repo is queryable. Exposed for tests.
+	// the server reports the new repo is queryable. Production NewCmd
+	// sets 500ms; the zero value (used by tests that construct options
+	// directly) skips the readiness probe entirely so they don't have to
+	// stub the View endpoint.
 	PollInterval time.Duration
 }
 
@@ -124,6 +127,16 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 	fmt.Fprintf(opts.IO.ErrOut, "%s Created fork %s\n", opts.IO.SuccessIcon(), fork.FullName)
+
+	// shithub's Fork endpoint returns immediately, but the server may
+	// still be provisioning the new repo's git storage. Poll View()
+	// until it returns success so a subsequent clone doesn't race the
+	// background job. We bound the wait so a stuck job doesn't wedge
+	// the command — timeout falls through with a warning and lets git
+	// surface its own error if the storage truly isn't ready.
+	if err := waitForForkReady(ctx, opts, rc, fork); err != nil {
+		fmt.Fprintf(opts.IO.ErrOut, "warning: %v\n", err)
+	}
 
 	// gh prompts interactively when neither --clone nor --no-clone is given.
 	// We mirror that: TTY + flag not set + nothing to disambiguate the intent.
@@ -258,4 +271,35 @@ func hostOrDefault(fn func() string) string {
 		return ""
 	}
 	return fn()
+}
+
+// maxForkWait caps the readiness probe so a stuck server doesn't wedge
+// the command. 5s is enough headroom for shithub's typical fork-init
+// path (a few hundred ms of background work) without dominating wall
+// time on the happy path where the first probe succeeds.
+const maxForkWait = 5 * time.Second
+
+// waitForForkReady polls View(fork.Owner.Login, fork.Name) until it
+// succeeds, which is the proxy signal that the server has materialized
+// the new repo's storage and a subsequent `git clone` won't race the
+// background provisioning job. A nil return means ready; a non-nil
+// return means the timeout fired and the caller should warn-but-proceed.
+func waitForForkReady(ctx context.Context, opts *options, rc *repos.Client, fork *repos.Repo) error {
+	if rc == nil || fork == nil || opts.PollInterval <= 0 {
+		return nil
+	}
+	deadline := time.Now().Add(maxForkWait)
+	for {
+		if _, err := rc.View(ctx, fork.Owner.Login, fork.Name); err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("fork not ready after %s; continuing anyway", maxForkWait)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(opts.PollInterval):
+		}
+	}
 }
