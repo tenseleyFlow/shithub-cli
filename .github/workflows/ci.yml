@@ -61,3 +61,33 @@ jobs:
 
       - name: Verify binary
         run: ./bin/shithub --version
+
+  # Windows runs go test + build directly because the Windows runners
+  # don't ship GNU make and our Makefile is the canonical entry on
+  # POSIX. Lint / fmt / spdx run on the Linux+macOS leg above — those
+  # checks are platform-invariant. This leg's job is catching the
+  # filesystem / process semantics that bite on Windows (path
+  # separators, file modes, exec.LookPath shims). Audit #154 added it.
+  ci-windows:
+    name: ci (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: go build
+        run: go build -o bin/shithub.exe ./cmd/shithub
+
+      - name: Verify binary
+        run: .\bin\shithub.exe --version
