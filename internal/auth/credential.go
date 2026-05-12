@@ -58,13 +58,21 @@ func ReadCredentialRequest(r io.Reader) (CredentialRequest, error) {
 // WriteCredentialResponse emits the helper response: username + password
 // lines, terminating blank line. git accepts this as "credentials found".
 //
+// protocol echoes the value from the matching CredentialRequest so git
+// sees a consistent record on both sides of the handshake; we default
+// to "https" only when the caller passes the empty string (e.g.,
+// older callers that haven't been updated). Audit #151.
+//
 // An empty username or token causes nothing to be written — git falls
 // through to its other credential helpers, matching gh's behavior.
-func WriteCredentialResponse(w io.Writer, username, token string) error {
+func WriteCredentialResponse(w io.Writer, protocol, username, token string) error {
 	if username == "" || token == "" {
 		return nil
 	}
-	if _, err := fmt.Fprintf(w, "protocol=https\n"); err != nil {
+	if protocol == "" {
+		protocol = "https"
+	}
+	if _, err := fmt.Fprintf(w, "protocol=%s\n", protocol); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "username=%s\n", username); err != nil {

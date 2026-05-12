@@ -87,5 +87,5 @@ func runGet(opts *Options) error {
 	if err != nil {
 		return nil
 	}
-	return auth.WriteCredentialResponse(opts.IO.Out, entry.User, token)
+	return auth.WriteCredentialResponse(opts.IO.Out, req.Protocol, entry.User, token)
 }

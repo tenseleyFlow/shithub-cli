@@ -46,7 +46,7 @@ func TestReadCredentialRequestEmpty(t *testing.T) {
 func TestWriteCredentialResponseHappy(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	if err := auth.WriteCredentialResponse(&buf, "mf", "shithub_pat_abc"); err != nil {
+	if err := auth.WriteCredentialResponse(&buf, "https", "mf", "shithub_pat_abc"); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	got := buf.String()
@@ -65,11 +65,43 @@ func TestWriteCredentialResponseHappy(t *testing.T) {
 	}
 }
 
+// TestWriteCredentialResponseEchoesProtocol covers audit #151: the
+// helper response must echo the protocol from the request rather than
+// always emitting "https". A non-https request (rare but legal) should
+// produce a matching response.
+func TestWriteCredentialResponseEchoesProtocol(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	if err := auth.WriteCredentialResponse(&buf, "http", "mf", "x"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if !strings.Contains(buf.String(), "protocol=http\n") {
+		t.Errorf("expected protocol=http; got %q", buf.String())
+	}
+	if strings.Contains(buf.String(), "protocol=https\n") {
+		t.Errorf("response should not have https when request was http: %q", buf.String())
+	}
+}
+
+// TestWriteCredentialResponseDefaultsToHttps confirms the back-compat
+// fallback: callers that pass an empty protocol still get an `https`
+// response (the prior hard-coded behavior).
+func TestWriteCredentialResponseDefaultsToHttps(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	if err := auth.WriteCredentialResponse(&buf, "", "mf", "x"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if !strings.Contains(buf.String(), "protocol=https\n") {
+		t.Errorf("empty protocol should default to https; got %q", buf.String())
+	}
+}
+
 func TestWriteCredentialResponseEmptyFallsThrough(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	// Empty username → emit nothing so git falls through to its next helper.
-	if err := auth.WriteCredentialResponse(&buf, "", "shithub_pat_x"); err != nil {
+	if err := auth.WriteCredentialResponse(&buf, "https", "", "shithub_pat_x"); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if buf.Len() != 0 {
@@ -77,7 +109,7 @@ func TestWriteCredentialResponseEmptyFallsThrough(t *testing.T) {
 	}
 
 	buf.Reset()
-	if err := auth.WriteCredentialResponse(&buf, "mf", ""); err != nil {
+	if err := auth.WriteCredentialResponse(&buf, "https", "mf", ""); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	if buf.Len() != 0 {
