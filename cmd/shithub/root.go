@@ -19,6 +19,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
+	issuecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
 )
 
@@ -136,4 +137,5 @@ func init() {
 	rootCmd.AddCommand(aliascmd.NewCmd(f))
 	rootCmd.AddCommand(completion.NewCmd(f))
 	rootCmd.AddCommand(repocmd.NewCmd(f))
+	rootCmd.AddCommand(issuecmd.NewCmd(f))
 }
