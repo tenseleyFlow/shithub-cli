@@ -72,6 +72,13 @@ func Execute() {
 // rewrites os.Args in place and returns (0, false) so cobra picks up
 // the rewritten verb. For misses or errors it returns (0, false) and
 // lets cobra produce its usual "unknown command" feedback.
+//
+// Concurrency contract (audit #155): tryAlias is called exactly once
+// per process, BEFORE rootCmd.Execute(), and the os.Args mutation on
+// line ~94 below relies on that. If anything ever runs alias dispatch
+// from multiple goroutines (or after cobra has begun parsing), the
+// in-place argv rewrite will race with whatever else is reading
+// os.Args — return a new []string from a refactored Dispatch instead.
 func tryAlias(args []string) (int, bool) {
 	cfg, err := config.Load()
 	if err != nil || cfg == nil || len(cfg.Aliases) == 0 {
