@@ -38,9 +38,13 @@ jobs:
           go install golang.org/x/tools/cmd/goimports@latest
 
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
+        # v8 of the action defaults to golangci-lint v2.x, which is what
+        # `.golangci.yml` (v2 schema) and our Go 1.26 build require. Older
+        # action releases with `version: latest` resolve to the v1.x line
+        # which is built with Go 1.24 and refuses our toolchain.
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.latest
           args: --timeout=5m
 
       - name: Run make ci
