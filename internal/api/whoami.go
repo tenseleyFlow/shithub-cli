@@ -60,6 +60,12 @@ type whoamiCache struct {
 // /api/v1/user; subsequent calls return the cached result. A non-nil
 // error is also cached so transient failures don't multiply into N retries
 // across `@me` expansion sites — callers retry by spinning up a fresh client.
+//
+// An empty Login (server emitted neither `login` nor `username`) is
+// rejected as an error rather than returned to callers — downstream
+// uses (ExpandMe, comment owner lookup, status filters) substitute the
+// login into URLs and payloads where the empty string would silently
+// produce garbage. Audit #159 (2026-05-12).
 func (c *Client) CurrentUser(ctx context.Context) (*User, error) {
 	c.whoami.mu.Lock()
 	defer c.whoami.mu.Unlock()
@@ -71,6 +77,10 @@ func (c *Client) CurrentUser(ctx context.Context) (*User, error) {
 	c.whoami.done = true
 	if err != nil {
 		c.whoami.err = fmt.Errorf("api: current user: %w", err)
+		return nil, c.whoami.err
+	}
+	if u.Login == "" {
+		c.whoami.err = fmt.Errorf("api: current user: server returned no login or username")
 		return nil, c.whoami.err
 	}
 	c.whoami.user = &u
