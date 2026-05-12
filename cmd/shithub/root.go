@@ -24,6 +24,7 @@ import (
 	labelcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/label"
 	prcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
+	searchcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search"
 )
 
 // longDescription is split out so help text stays readable and we can
@@ -144,4 +145,5 @@ func init() {
 	rootCmd.AddCommand(prcmd.NewCmd(f))
 	rootCmd.AddCommand(labelcmd.NewCmd(f))
 	rootCmd.AddCommand(browsecmd.NewCmd(f))
+	rootCmd.AddCommand(searchcmd.NewCmd(f))
 }
