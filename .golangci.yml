@@ -22,7 +22,12 @@ linters:
   settings:
     revive:
       rules:
+        # Disable the stutter sub-check of `exported`; package-qualified
+        # names like config.ConfigDir read more clearly at call sites than
+        # config.Dir, and renaming for one lint preference is not worth it.
         - name: exported
+          arguments:
+            - disableStutteringCheck
         - name: var-naming
         - name: error-return
         - name: error-naming
@@ -34,6 +39,12 @@ linters:
         # Subprocess invocation via safeexec is intentional in internal/git;
         # we explicitly shell out to canonical git plumbing.
         - G204
+        # The env-var names (SHITHUB_TOKEN, etc.) are public identifiers,
+        # not embedded secrets; G101 fires on the substring "TOKEN".
+        - G101
+        # We intentionally persist HostEntry to YAML; the OAuthToken field
+        # is the whole point of hosts.yml fallback storage.
+        - G117
   exclusions:
     rules:
       # Tests routinely use error returns we don't check.
