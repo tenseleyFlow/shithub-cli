@@ -136,6 +136,11 @@ func Export(out io.Writer, opts Options, exporter Exporter, data any, prettyJSON
 
 	// `--json` set with an empty value is treated as "list fields" — useful
 	// for users who do `shithub repo list --json=` to discover field names.
+	// Fields are emitted alphabetically (not in Exporter.Fields() insertion
+	// order) so the listing is stable across exporter rewrites and matches
+	// gh's `--json` discovery output. Audit #140 (2026-05-12) ratified this
+	// behavior; the C02 spec line 59 says "gh behavior" which is also
+	// alphabetical.
 	if opts.JSONSet && opts.JSONFields == "" {
 		fields := exporter.Fields()
 		sorted := append([]string(nil), fields...)
