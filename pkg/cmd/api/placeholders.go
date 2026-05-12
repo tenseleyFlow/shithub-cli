@@ -26,20 +26,24 @@ type placeholderSpec struct {
 // substitute returns path with every recognized placeholder replaced by
 // the corresponding value. Missing values for placeholders that DO
 // appear in the path return an error so users see a clear "no -R or
-// SHITHUB_REPO set" message instead of a 404.
+// SHITHUB_REPO set" message instead of a 404. Walks the placeholder
+// list in a fixed order so the error message for a missing value is
+// deterministic across runs (Go's map iteration is intentionally
+// randomized, which would otherwise flake on multi-placeholder paths).
 func (s placeholderSpec) substitute(path string) (string, error) {
-	for token, value := range map[string]string{
-		"{owner}":  s.Owner,
-		"{repo}":   s.Repo,
-		"{branch}": s.Branch,
-	} {
-		if !strings.Contains(path, token) {
+	tokens := []struct{ name, value string }{
+		{"{owner}", s.Owner},
+		{"{repo}", s.Repo},
+		{"{branch}", s.Branch},
+	}
+	for _, t := range tokens {
+		if !strings.Contains(path, t.name) {
 			continue
 		}
-		if value == "" {
-			return "", fmt.Errorf("api: %s placeholder needs -R owner/repo or %s env", token, EnvRepo)
+		if t.value == "" {
+			return "", fmt.Errorf("api: %s placeholder needs -R owner/repo or %s env", t.name, EnvRepo)
 		}
-		path = strings.ReplaceAll(path, token, value)
+		path = strings.ReplaceAll(path, t.name, t.value)
 	}
 	return path, nil
 }
