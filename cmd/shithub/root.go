@@ -16,6 +16,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
 	aliascmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/alias"
 	apicmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/api"
+	attestationcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/attestation"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/auth"
 	browsecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/browse"
 	cachecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/cache"
@@ -179,4 +180,5 @@ func init() {
 	rootCmd.AddCommand(gistcmd.NewCmd(f))
 	rootCmd.AddCommand(projectcmd.NewCmd(f))
 	rootCmd.AddCommand(rulesetcmd.NewCmd(f))
+	rootCmd.AddCommand(attestationcmd.NewCmd(f))
 }
