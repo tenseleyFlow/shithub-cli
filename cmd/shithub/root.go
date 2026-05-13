@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/build"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/config"
+	"github.com/tenseleyFlow/shithub-cli/internal/extension"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
 	aliascmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/alias"
@@ -22,6 +24,7 @@ import (
 	cachecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/cache"
 	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/completion"
 	configcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/config"
+	extensioncmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/extension"
 	gistcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gist"
 	gpgkeycmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/gpgkey"
 	issuecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue"
@@ -65,17 +68,66 @@ var rootCmd = &cobra.Command{
 	Version: fmt.Sprintf("%s (%s) built %s", build.Version, build.Commit, build.Date),
 }
 
-// Execute runs the root command and exits non-zero on error. Before
-// dispatching to cobra it tries alias expansion against the user's
-// config; a matching shell alias takes over the process entirely.
+// Execute runs the root command and exits non-zero on error.
+//
+// Before dispatching to cobra we try, in order:
+//  1. Alias expansion against the user's config (a shell alias takes
+//     over the process entirely; a direct alias rewrites argv).
+//  2. Extension dispatch — if the first arg is not a built-in verb
+//     but matches an installed `shithub-<verb>` extension under
+//     ${SHITHUB_CONFIG_DIR}/extensions/, exec it and exit with its
+//     status.
+//
+// Only when neither path claims the invocation do we let cobra parse.
 func Execute() {
 	if exitCode, handled := tryAlias(os.Args[1:]); handled {
+		os.Exit(exitCode)
+	}
+	if exitCode, handled := tryExtension(os.Args[1:]); handled {
 		os.Exit(exitCode)
 	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "shithub:", err)
 		os.Exit(1)
 	}
+}
+
+// tryExtension dispatches to a third-party `shithub-<verb>` extension
+// when the first arg is a non-flag verb not claimed by any built-in
+// cobra subcommand.  Returns (exitCode, true) when an extension was
+// found and run.  Misses, flag-only invocations, and empty argv all
+// return (0, false) so cobra continues normally.
+//
+// Built-ins always win — an extension named `shithub-issue` cannot
+// shadow the built-in `issue` verb.  The lookup also rejects
+// path-traversal-y verbs before touching the filesystem.
+func tryExtension(args []string) (int, bool) {
+	if len(args) == 0 {
+		return 0, false
+	}
+	verb := args[0]
+	if verb == "" || strings.HasPrefix(verb, "-") {
+		return 0, false
+	}
+	for _, c := range rootCmd.Commands() {
+		if c.Name() == verb {
+			return 0, false
+		}
+		for _, alias := range c.Aliases {
+			if alias == verb {
+				return 0, false
+			}
+		}
+	}
+	dir, err := config.ExtensionsDir()
+	if err != nil {
+		return 0, false
+	}
+	path, ok := extension.Find(dir, verb)
+	if !ok {
+		return 0, false
+	}
+	return extension.Exec(path, args[1:]), true
 }
 
 // tryAlias looks up the first non-flag arg as an alias name. Returns
@@ -181,4 +233,5 @@ func init() {
 	rootCmd.AddCommand(projectcmd.NewCmd(f))
 	rootCmd.AddCommand(rulesetcmd.NewCmd(f))
 	rootCmd.AddCommand(attestationcmd.NewCmd(f))
+	rootCmd.AddCommand(extensioncmd.NewCmd(f))
 }
