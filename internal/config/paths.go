@@ -92,6 +92,17 @@ func CacheDir() (string, error) {
 	return filepath.Join(dir, "cache"), nil
 }
 
+// ExtensionsDir returns the directory where third-party `shithub-<verb>`
+// extensions are installed. The dispatcher in cmd/shithub/root.go looks
+// here when a top-level verb doesn't match a built-in.
+func ExtensionsDir() (string, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "extensions"), nil
+}
+
 // EnsureDir creates the config directory tree with 0700 permissions if it
 // does not already exist. It is safe to call repeatedly. On existing
 // directories we do not chmod — a user who has loosened perms intentionally
