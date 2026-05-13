@@ -30,6 +30,7 @@ import (
 	projectcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/project"
 	releasecmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/release"
 	repocmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo"
+	rulesetcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/ruleset"
 	runcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/run"
 	searchcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search"
 	secretcmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/secret"
@@ -177,4 +178,5 @@ func init() {
 	rootCmd.AddCommand(variablecmd.NewCmd(f))
 	rootCmd.AddCommand(gistcmd.NewCmd(f))
 	rootCmd.AddCommand(projectcmd.NewCmd(f))
+	rootCmd.AddCommand(rulesetcmd.NewCmd(f))
 }
