@@ -148,6 +148,11 @@ func (s *IOStreams) SetStdoutTTY(tty bool) { s.stdoutTTY = tty }
 // True in Test() streams; commands check this before invoking survey/huh.
 func (s *IOStreams) NeverPrompt() bool { return s.neverPrompt }
 
+// SetNeverPrompt overrides the no-prompt flag — tests opt back into
+// interactive paths by flipping this to false, after wiring the
+// prompter fake with the desired responses.
+func (s *IOStreams) SetNeverPrompt(v bool) { s.neverPrompt = v }
+
 // TerminalWidth returns the detected terminal width in columns. Returns
 // DefaultTerminalWidth when stdout is not a TTY or detection fails.
 func (s *IOStreams) TerminalWidth() int {
