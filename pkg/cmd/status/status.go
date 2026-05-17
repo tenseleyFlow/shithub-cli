@@ -12,6 +12,7 @@ package status
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,7 +106,11 @@ func Run(ctx context.Context, opts *options) error {
 	dash, warnings := fanOut(ctx, sc, opts, user.Login)
 	dash.User = user.Login
 
-	for _, w := range warnings {
+	// Audit A2: when all four sections fan out and fail with the same
+	// underlying error (typically "token lacks scope ..." for a too-
+	// narrow PAT), the dashboard printed four identical warnings.
+	// Collapse duplicates so the user gets one actionable line.
+	for _, w := range collapseWarnings(warnings) {
 		fmt.Fprintf(opts.IO.ErrOut, "warning: %s\n", w)
 	}
 
@@ -181,6 +186,62 @@ func fanOut(ctx context.Context, sc *search.Client, opts *options, login string)
 	}()
 	wg.Wait()
 	return dash, warnings
+}
+
+// collapseWarnings deduplicates warnings whose error text (the part
+// after "section_label: ") is identical. When N sections all fail
+// the same way (the missing-scope case is the canonical example),
+// the output collapses to a single "every section: <error>" line.
+// Returns the input untouched when every warning is distinct.
+func collapseWarnings(in []string) []string {
+	if len(in) <= 1 {
+		return in
+	}
+	const sep = ": "
+	groups := make(map[string][]string)
+	order := []string{}
+	for _, w := range in {
+		idx := strings.Index(w, sep)
+		if idx < 0 {
+			// Unparseable; keep as-is.
+			groups[w] = append(groups[w], "")
+			order = appendIfNew(order, w)
+			continue
+		}
+		label, body := w[:idx], w[idx+len(sep):]
+		if _, ok := groups[body]; !ok {
+			order = append(order, body)
+		}
+		groups[body] = append(groups[body], label)
+	}
+	out := make([]string, 0, len(order))
+	for _, body := range order {
+		labels := groups[body]
+		if len(labels) <= 1 {
+			label := ""
+			if len(labels) == 1 {
+				label = labels[0]
+			}
+			if label == "" {
+				out = append(out, body)
+			} else {
+				out = append(out, label+": "+body)
+			}
+			continue
+		}
+		// All sections share this error — say so plainly.
+		out = append(out, "every section: "+body)
+	}
+	return out
+}
+
+func appendIfNew(s []string, v string) []string {
+	for _, x := range s {
+		if x == v {
+			return s
+		}
+	}
+	return append(s, v)
 }
 
 // capItems clips a slice to the per-section cap. Search.Client already
