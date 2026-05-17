@@ -199,6 +199,13 @@ func Run(ctx context.Context, opts *Options) error {
 
 // validate enforces the mutual-exclusion rules announced in help text.
 func validate(opts *Options) error {
+	// Audit A9: an empty endpoint reached the server for a useless
+	// 404 and confused the user. Cobra's ExactArgs(1) admits the
+	// empty string as "one arg"; reject it explicitly so the error
+	// surfaces locally without a wire roundtrip.
+	if strings.TrimSpace(opts.Endpoint) == "" {
+		return errors.New("api: endpoint path is required (e.g. shithub api user)")
+	}
 	if opts.JQ != "" && opts.Template != "" {
 		return errors.New("api: --jq and --template are mutually exclusive")
 	}
@@ -399,6 +406,10 @@ func runJQ(out io.Writer, expr string, body []byte) error {
 }
 
 // runTemplate parses tmpl and executes it against the decoded body.
+// Audit A6: gh's `--template` appends a trailing newline when the
+// template body itself doesn't end in one — without it the rendered
+// value runs into the next shell prompt or pipeline reader's line
+// boundary. We buffer the template output, then add `\n` iff missing.
 func runTemplate(out io.Writer, tmpl string, body []byte) error {
 	t, err := template.New("api").Parse(tmpl)
 	if err != nil {
@@ -408,7 +419,19 @@ func runTemplate(out io.Writer, tmpl string, body []byte) error {
 	if err := json.Unmarshal(body, &input); err != nil {
 		return fmt.Errorf("api: decode for template: %w", err)
 	}
-	return t.Execute(out, input)
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, input); err != nil {
+		return err
+	}
+	rendered := buf.Bytes()
+	if _, err := out.Write(rendered); err != nil {
+		return err
+	}
+	if len(rendered) == 0 || rendered[len(rendered)-1] != '\n' {
+		_, err := io.WriteString(out, "\n")
+		return err
+	}
+	return nil
 }
 
 // writeHeaders renders the status line + headers in HTTP-ish text form
