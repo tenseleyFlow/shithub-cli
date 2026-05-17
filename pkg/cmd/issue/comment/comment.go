@@ -125,9 +125,7 @@ func Run(ctx context.Context, opts *options) error {
 		if err != nil {
 			return err
 		}
-		if edited.HTMLURL != "" {
-			fmt.Fprintln(opts.IO.Out, edited.HTMLURL)
-		}
+		printCommentResult(opts.IO, ref, edited.HTMLURL, "Edited")
 		return nil
 	}
 
@@ -135,10 +133,23 @@ func Run(ctx context.Context, opts *options) error {
 	if err != nil {
 		return err
 	}
-	if created.HTMLURL != "" {
-		fmt.Fprintln(opts.IO.Out, created.HTMLURL)
-	}
+	printCommentResult(opts.IO, ref, created.HTMLURL, "Commented on")
 	return nil
+}
+
+// printCommentResult writes the post-comment success indicator.
+// Audit A18: pre-fix this fell through silently when the server's
+// response had an empty html_url (current shithub state) — users
+// couldn't tell whether their comment landed. Now: stdout gets the
+// URL when present (script-friendly), stderr gets a confirmation
+// line on the empty-URL path so the interactive flow is never silent.
+func printCommentResult(ios *iostreams.IOStreams, ref issueshared.IssueRef, htmlURL, verb string) {
+	if htmlURL != "" {
+		fmt.Fprintln(ios.Out, htmlURL)
+		return
+	}
+	fmt.Fprintf(ios.ErrOut, "%s %s %s/%s#%d\n",
+		ios.SuccessIcon(), verb, ref.Repo.Owner, ref.Repo.Name, ref.Number)
 }
 
 // pickLastByCaller resolves the current user and finds their most-recent
