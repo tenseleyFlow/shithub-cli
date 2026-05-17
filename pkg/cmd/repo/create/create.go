@@ -82,7 +82,11 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&opts.Description, "description", "d", "", "description of the repository")
-	cmd.Flags().StringVarP(&opts.Homepage, "homepage", "h", "", "URL associated with the repository")
+	// --homepage intentionally has no short flag — "-h" collides with
+	// cobra's auto-registered --help shorthand and panics flag setup.
+	// gh accepts gh repo create -h but pays for it by reassigning the
+	// help short flag; we keep --help universally accessible.
+	cmd.Flags().StringVar(&opts.Homepage, "homepage", "", "URL associated with the repository")
 	cmd.Flags().BoolVar(&opts.Public, "public", false, "make the new repository public")
 	cmd.Flags().BoolVar(&opts.Private, "private", false, "make the new repository private")
 	cmd.Flags().BoolVar(&opts.Internal, "internal", false, "make the new repository internal (org-only)")
