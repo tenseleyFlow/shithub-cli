@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -29,6 +30,39 @@ func parseFieldFlag(arg string) (key, value string, err error) {
 		return "", "", fmt.Errorf("api: field %q missing '=' separator", arg)
 	}
 	return arg[:idx], arg[idx+1:], nil
+}
+
+// queryStringFromFields encodes -f/-F flags as URL query parameters for
+// the GET-with-fields case (C-audit C12). Values flow through the same
+// expansion as the body path: -F runs bool/number/@file detection, -f
+// keeps strings verbatim. Order is preserved for stable URL shape.
+func queryStringFromFields(typed, rawFields []string, stdin io.Reader) (string, error) {
+	entries, err := fieldEntriesFromFlags(typed, rawFields)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 {
+		return "", nil
+	}
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		val := e.value
+		if e.raw {
+			val = e.value
+		} else {
+			// Typed (-F) supports @file; expand it just like the body
+			// path does so users don't have to switch to -f on GET.
+			if strings.HasPrefix(e.value, "@") {
+				data, ferr := readInput(strings.TrimPrefix(e.value, "@"), stdin)
+				if ferr != nil {
+					return "", ferr
+				}
+				val = string(data)
+			}
+		}
+		parts = append(parts, url.QueryEscape(e.key)+"="+url.QueryEscape(val))
+	}
+	return strings.Join(parts, "&"), nil
 }
 
 // fieldEntriesFromFlags merges the -F and -f flag slices preserving the
