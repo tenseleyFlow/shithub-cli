@@ -65,6 +65,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the issue in a browser")
 	cmd.Flags().BoolVarP(&opts.Comments, "comments", "c", false, "include the comment thread inline")
 	output.AddFlags(cmd, &opts.Exporter)
+	output.MarkWebMutuallyExclusive(cmd)
 	return cmd
 }
 
