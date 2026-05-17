@@ -128,6 +128,10 @@ type Options struct {
 	HTTPClient *http.Client
 	// UserAgent overrides the default `shithub-cli/<ver> (<os>/<arch>)`.
 	UserAgent string
+	// Sleep replaces the back-off between polls. Production leaves it
+	// nil and uses a context-aware time.NewTimer wait; tests inject a
+	// no-op (or instrumented) implementation to bypass real time.
+	Sleep func(ctx context.Context, d time.Duration) error
 }
 
 // NewClient builds a Client. Returns an error if BaseURL is non-https
@@ -175,6 +179,11 @@ func NewClient(opts Options) (*Client, error) {
 		cid = DefaultClientID
 	}
 
+	sleep := opts.Sleep
+	if sleep == nil {
+		sleep = contextSleep
+	}
+
 	return &Client{
 		host:      host,
 		baseURL:   strings.TrimRight(parsed.String(), "/"),
@@ -182,7 +191,7 @@ func NewClient(opts Options) (*Client, error) {
 		userAgent: ua,
 		clientID:  cid,
 		clock:     time.Now,
-		sleep:     contextSleep,
+		sleep:     sleep,
 	}, nil
 }
 
