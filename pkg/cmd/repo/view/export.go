@@ -17,12 +17,18 @@ func (exporter) Fields() []string { return exportableFields }
 
 // exportableFields is the canonical projection catalog. Order matters for
 // `--json` (no value) listings; keep alphabetical.
+//
+// `forkCount`/`stargazerCount`/`watcherCount` are the gh-compat aliases
+// (B2): gh's `gh repo view --json` exposes those names, and ported
+// scripts break without them. The legacy `forks`/`stargazers`/`watchers`
+// stay populated for one release cycle.
 var exportableFields = []string{
 	"archived",
 	"createdAt",
 	"defaultBranch",
 	"description",
 	"fork",
+	"forkCount",
 	"forks",
 	"fullName",
 	"homepage",
@@ -36,11 +42,13 @@ var exportableFields = []string{
 	"owner",
 	"pushedAt",
 	"size",
+	"stargazerCount",
 	"stargazers",
 	"topics",
 	"updatedAt",
 	"url",
 	"visibility",
+	"watcherCount",
 	"watchers",
 }
 
@@ -62,30 +70,33 @@ func (exporter) Filter(v any) (any, error) {
 		}
 	}
 	return map[string]any{
-		"archived":      r.Archived,
-		"createdAt":     r.CreatedAt,
-		"defaultBranch": r.DefaultBranch,
-		"description":   r.Description,
-		"fork":          r.Fork,
-		"forks":         r.Forks,
-		"fullName":      r.FullName,
-		"homepage":      r.Homepage,
-		"id":            r.ID,
-		"isPrivate":     r.Private,
-		"isTemplate":    r.IsTemplate,
-		"language":      r.Language,
-		"license":       license,
-		"name":          r.Name,
-		"openIssues":    r.OpenIssues,
-		"owner":         map[string]any{"login": r.Owner.Login, "type": r.Owner.Type},
-		"pushedAt":      r.PushedAt,
-		"size":          r.Size,
-		"stargazers":    r.Stargazers,
-		"topics":        r.Topics,
-		"updatedAt":     r.UpdatedAt,
-		"url":           r.HTMLURL,
-		"visibility":    visibilityField(r),
-		"watchers":      r.Watchers,
+		"archived":       r.Archived,
+		"createdAt":      r.CreatedAt,
+		"defaultBranch":  r.DefaultBranch,
+		"description":    r.Description,
+		"fork":           r.Fork,
+		"forkCount":      r.Forks,
+		"forks":          r.Forks,
+		"fullName":       r.FullName,
+		"homepage":       r.Homepage,
+		"id":             r.ID,
+		"isPrivate":      r.Private,
+		"isTemplate":     r.IsTemplate,
+		"language":       r.Language,
+		"license":        license,
+		"name":           r.Name,
+		"openIssues":     r.OpenIssues,
+		"owner":          map[string]any{"login": r.Owner.Login, "type": r.Owner.Type},
+		"pushedAt":       r.PushedAt,
+		"size":           r.Size,
+		"stargazerCount": r.Stargazers,
+		"stargazers":     r.Stargazers,
+		"topics":         r.Topics,
+		"updatedAt":      r.UpdatedAt,
+		"url":            r.HTMLURL,
+		"visibility":     visibilityField(r),
+		"watcherCount":   r.Watchers,
+		"watchers":       r.Watchers,
 	}, nil
 }
 
