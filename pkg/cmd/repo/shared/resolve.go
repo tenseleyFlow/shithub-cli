@@ -38,15 +38,31 @@ func (r RepoRef) FullName() string {
 	return r.Owner + "/" + r.Name
 }
 
-// ParseRepoArg accepts the canonical `<owner>/<name>` form (and tolerates
-// a host prefix `host/owner/name`). Returns an error for anything else;
-// callers that want to accept URLs should pre-parse via internal/git
-// before calling.
+// ParseRepoArg accepts the canonical `<owner>/<name>` form, `host/owner/name`,
+// HTTPS/SSH URL forms, and tolerates a trailing `.git` suffix on any of
+// them (C-audit C16+C17). gh-compat: `gh issue list -R https://github.com/cli/cli`
+// works, and copy-pasting `git remote get-url origin` into `-R` works.
 func ParseRepoArg(s string) (RepoRef, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return RepoRef{}, errors.New("repo: argument is empty")
 	}
+
+	// URL forms: route through the existing ParseRemoteURL which handles
+	// https://, http://, ssh://, and the SCP-like git@host:owner/repo
+	// form. ParseRemoteURL strips the `.git` suffix already.
+	if isLikelyURL(s) {
+		rem, err := git.ParseRemoteURL(s)
+		if err != nil {
+			return RepoRef{}, fmt.Errorf("repo: parse %q: %w", s, err)
+		}
+		return RepoRef{Host: rem.Host, Owner: rem.Owner, Name: rem.Repo}, nil
+	}
+
+	// Bare owner/name (or host/owner/name) form. Strip a trailing
+	// `.git` from the repo segment so scripts that paste the literal
+	// remote-URL tail (`mfwolffe/repo.git`) don't 404.
+	s = strings.TrimSuffix(s, ".git")
 	parts := strings.Split(s, "/")
 	switch len(parts) {
 	case 2:
@@ -62,6 +78,24 @@ func ParseRepoArg(s string) (RepoRef, error) {
 	default:
 		return RepoRef{}, fmt.Errorf("repo: expected owner/name (got %q)", s)
 	}
+}
+
+// isLikelyURL reports whether s looks like a remote URL rather than a
+// bare owner/name pair. Conservative: only the shapes ParseRemoteURL
+// actually accepts trigger the URL path, so users with a literal `:`
+// or `@` in an owner segment still hit the bare path with a clear
+// error.
+func isLikelyURL(s string) bool {
+	if strings.Contains(s, "://") {
+		return true
+	}
+	// SCP-like: user@host:path
+	if at := strings.IndexByte(s, '@'); at > 0 {
+		if colon := strings.IndexByte(s, ':'); colon > at {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolver is the contract a command uses to figure out which repo it's
