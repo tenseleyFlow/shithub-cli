@@ -283,6 +283,10 @@ func newDeviceOpts(t *testing.T, srv *httptest.Server) (*Options, *cmdutiltest.F
 	t.Helper()
 	opts, tf := newOpts(t)
 	tf.IOStreams.SetNeverPrompt(false)
+	// CI=true on GitHub Actions would otherwise trip the CI-refusal
+	// guard for every device-flow test. Individual tests that exercise
+	// that guard (TestLoginRefusesDeviceFlowUnderCI) re-Setenv after.
+	t.Setenv("CI", "")
 	opts.NewDeviceClient = func(_ string) (*device.Client, error) {
 		t.Setenv(device.EnvInsecureHTTP, "1")
 		return device.NewClient(device.Options{
@@ -457,5 +461,80 @@ func TestLoginWithTokenAndWebMutuallyExclusive(t *testing.T) {
 	err := Run(context.Background(), opts)
 	if err == nil || !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("err = %v, want 'mutually exclusive'", err)
+	}
+}
+
+func TestLoginRefusesDeviceFlowUnderCI(t *testing.T) {
+	srv := setupDeviceFlowServer(t, "shithub_pat_x", 0)
+	defer srv.Close()
+	opts, _ := newDeviceOpts(t, srv)
+	opts.Hostname = "shithub.sh"
+	// Set CI *after* newDeviceOpts, which clears it.
+	t.Setenv("CI", "true")
+
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "CI=true") {
+		t.Errorf("err = %v, want CI refusal", err)
+	}
+}
+
+func TestLoginCIFalseStillRuns(t *testing.T) {
+	// CI=false (a literal "false" string) is a common shape in CI
+	// matrices that toggle the variable per-job. We treat it as
+	// not-set so legitimate non-CI runs aren't blocked.
+	srv := setupDeviceFlowServer(t, "shithub_pat_x", 0)
+	defer srv.Close()
+	opts, tf := newDeviceOpts(t, srv)
+	opts.Hostname = "shithub.sh"
+	opts.InsecureStorage = true
+	t.Setenv("CI", "false")
+	tf.Prompt.QueueConfirm(false)
+	tf.Server.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1, "username": "mf"})
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run with CI=false: %v", err)
+	}
+}
+
+func TestLoginRefusesNonHTTPSVerificationURI(t *testing.T) {
+	// The test setup uses an httptest server (http://); without
+	// SHITHUB_DEV_INSECURE_HTTP the validator would refuse the
+	// request URL up-front in NewClient. So here we exercise the
+	// *response*-URL validation: the server returns a
+	// verification_uri pointing at a different host (mimicking a
+	// compromised server or a misconfiguration). The login flow
+	// must refuse before opening the browser.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login/device/code", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(device.CodeResponse{
+			DeviceCode:              "dc",
+			UserCode:                "AAAA-BBBB",
+			VerificationURI:         "https://evil.example/login/device",
+			VerificationURIComplete: "https://evil.example/login/device?user_code=AAAA-BBBB",
+			ExpiresIn:               900,
+			Interval:                0,
+		})
+	})
+	mux.HandleFunc("/login/oauth/access_token", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(device.TokenResponse{
+			AccessToken: "shithub_pat_evil",
+			TokenType:   "bearer",
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	opts, _ := newDeviceOpts(t, srv)
+	opts.Hostname = "shithub.sh"
+
+	browserCalled := false
+	opts.OpenBrowser = func(_ string) error { browserCalled = true; return nil }
+
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "does not match bound host") {
+		t.Errorf("err = %v, want host-mismatch refusal", err)
+	}
+	if browserCalled {
+		t.Error("OpenBrowser must not be called when verification URI is foreign")
 	}
 }
