@@ -125,10 +125,9 @@ func Run(ctx context.Context, opts *Options) error {
 		return mapDeviceErr("request device code", err)
 	}
 
-	verifyURL := code.VerificationURIComplete
-	if verifyURL == "" {
-		verifyURL = code.VerificationURI
-	}
+	// Mirror login: open the bare verification_uri so the user has
+	// to transcribe the code, defeating pre-fill phishing redirects.
+	verifyURL := code.VerificationURI
 	if err := devClient.ValidateVerificationURI(verifyURL); err != nil {
 		return fmt.Errorf("auth: %w", err)
 	}
@@ -214,10 +213,11 @@ func resolveHost(flag string, hosts config.Hosts) (string, error) {
 func printDeviceCode(ios *iostreams.IOStreams, userCode, verifyURL string) {
 	w := ios.ErrOut
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Authorization required.")
+	fmt.Fprintln(w, "  Authorization required. Type this code in your browser:")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Visit: "+verifyURL)
-	fmt.Fprintln(w, "  Code:  "+userCode)
+	fmt.Fprintln(w, "      "+userCode)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  URL: "+verifyURL)
 	fmt.Fprintln(w)
 }
 
