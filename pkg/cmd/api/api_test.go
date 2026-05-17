@@ -149,6 +149,72 @@ func TestRunTemplateExecution(t *testing.T) {
 	}
 }
 
+// TestRunTemplateRejectsMissingKey covers C13: missing keys must
+// surface as a template-execution error, never as the literal string
+// "<no value>". Scripts piping `api -t '{{.field}}'` into `read` were
+// silently consuming the marker.
+func TestRunTemplateRejectsMissingKey(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "u"
+	opts.Template = `{{.totally_missing_field}}`
+	tf.Server.RegisterJSON("GET", "/api/v1/u", 200, map[string]any{"id": 1})
+
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error on missing template field")
+	}
+	if strings.Contains(tf.Out.String(), "<no value>") {
+		t.Errorf("C13 regression: output contains '<no value>': %q", tf.Out.String())
+	}
+}
+
+// TestRunGETWithFieldsBecomesQueryString covers C12: -f/-F on GET
+// emits URL query params, not a body. Pre-D3b the server got a body
+// on GET and responded with a confusing parse error.
+func TestRunGETWithFieldsBecomesQueryString(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "search"
+	opts.Method = "GET"
+	opts.Fields = []string{"q=hello", "sort=stars"}
+	var seenQuery string
+	tf.Server.Handle("GET", "/api/v1/search", func(w http.ResponseWriter, r *http.Request) {
+		seenQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Order-insensitive substring check: both params must appear.
+	for _, want := range []string{"q=hello", "sort=stars"} {
+		if !strings.Contains(seenQuery, want) {
+			t.Errorf("query missing %q; got: %s", want, seenQuery)
+		}
+	}
+}
+
+// TestRunPaginateRejectsNonArrayResponse covers C11: --paginate
+// against an endpoint returning a single object must error, not
+// silently wrap the object in a one-element array.
+func TestRunPaginateRejectsNonArrayResponse(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "user"
+	opts.Paginate = true
+	tf.Server.Handle("GET", "/api/v1/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"login":"mf"}`))
+	})
+
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for --paginate on object endpoint")
+	}
+	if !strings.Contains(err.Error(), "JSON array") {
+		t.Errorf("error should mention JSON array; got: %v", err)
+	}
+}
+
 func TestRunMutexJQAndTemplate(t *testing.T) {
 	opts, _ := newOpts(t)
 	opts.Endpoint = "u"

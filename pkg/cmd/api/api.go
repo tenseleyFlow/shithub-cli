@@ -186,6 +186,26 @@ func Run(ctx context.Context, opts *Options) error {
 		}
 	}
 
+	// C12: -f/-F on GET should produce query-string params, not a
+	// JSON body. Pre-D3b the body got attached to GET and the server
+	// rejected with a confusing JSON-parse error. gh-compat: GET
+	// fields land on the URL.
+	if strings.EqualFold(method, http.MethodGet) && body != nil && isJSONBody {
+		qs, qerr := queryStringFromFields(opts.Fields, opts.RawFields, opts.IO.In)
+		if qerr != nil {
+			return qerr
+		}
+		if qs != "" {
+			if strings.Contains(endpoint, "?") {
+				endpoint += "&" + qs
+			} else {
+				endpoint += "?" + qs
+			}
+		}
+		body = nil
+		isJSONBody = false
+	}
+
 	headers, err := buildHeaders(opts, isJSONBody)
 	if err != nil {
 		return err
@@ -411,7 +431,11 @@ func runJQ(out io.Writer, expr string, body []byte) error {
 // value runs into the next shell prompt or pipeline reader's line
 // boundary. We buffer the template output, then add `\n` iff missing.
 func runTemplate(out io.Writer, tmpl string, body []byte) error {
-	t, err := template.New("api").Parse(tmpl)
+	// C13: missingkey=error means `{{.totally_missing}}` returns a
+	// template-execution error instead of printing the literal string
+	// "<no value>". Scripts piping into `xargs` or `read` no longer
+	// silently consume an unintended marker.
+	t, err := template.New("api").Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return fmt.Errorf("api: parse template: %w", err)
 	}
