@@ -110,6 +110,69 @@ func TestForkOrgFlag(t *testing.T) {
 	}
 }
 
+// TestForkRejectsOwnRepo covers B4: forking your own repo gets a clear
+// pre-flight error citing the owner — not the server's generic 422.
+// The forks endpoint is intentionally not stubbed so the test fails
+// loudly if the pre-check ever regresses and we round-trip to the API.
+func TestForkRejectsOwnRepo(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/user", 200, map[string]any{
+		"id": 1, "login": "octo",
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		RepoArg:     "octo/hello",
+		RemoteName:  "origin",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when forking own repo, got nil")
+	}
+	if !strings.Contains(err.Error(), "cannot fork your own repository") {
+		t.Errorf("error message: %v", err)
+	}
+	if !strings.Contains(err.Error(), "octo/hello") {
+		t.Errorf("error should cite the repo: %v", err)
+	}
+}
+
+// TestForkOwnRepoIntoOrgAllowed: --org bypasses the own-repo guard,
+// since forking your own repo into a different org is a real workflow.
+func TestForkOwnRepoIntoOrgAllowed(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/user", 200, map[string]any{
+		"id": 1, "login": "octo",
+	})
+	called := false
+	tf.Server.Handle(http.MethodPost, "/api/v1/repos/octo/hello/forks", func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(repos.Repo{Name: "hello", FullName: "acme/hello", Owner: repos.Owner{Login: "acme"}, Fork: true})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		RepoArg:     "octo/hello",
+		Org:         "acme",
+		RemoteName:  "origin",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !called {
+		t.Error("expected forks endpoint to be hit when --org is set")
+	}
+}
+
 func TestForkCloneWithUpstream(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// Windows TempDir paths look like `C:\...` which dirFromCloneURL

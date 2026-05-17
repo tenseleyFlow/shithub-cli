@@ -31,10 +31,25 @@ type MergeInput struct {
 }
 
 // MergeResult is the response from a successful merge.
+//
+// gh-compat: the canonical field is `merge_commit_sha` (GitHub's
+// PUT /merges response). shithub's earlier API surface used a bare
+// `sha`; we accept both so the success line ("Merged PR #N at <sha>")
+// stays populated regardless of which name the server emits. The
+// CommitSHA() accessor prefers the gh-compat form.
 type MergeResult struct {
-	SHA     string `json:"sha"`
-	Merged  bool   `json:"merged"`
-	Message string `json:"message,omitempty"`
+	SHA            string `json:"sha,omitempty"`
+	MergeCommitSHA string `json:"merge_commit_sha,omitempty"`
+	Merged         bool   `json:"merged"`
+	Message        string `json:"message,omitempty"`
+}
+
+// CommitSHA returns the merge commit hash, tolerating both wire names.
+func (m *MergeResult) CommitSHA() string {
+	if m.MergeCommitSHA != "" {
+		return m.MergeCommitSHA
+	}
+	return m.SHA
 }
 
 // Merge calls PUT /pulls/{n}/merge. The --admin override is communicated

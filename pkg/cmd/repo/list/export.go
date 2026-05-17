@@ -15,12 +15,16 @@ type exporter struct{}
 
 func (exporter) Fields() []string { return listExportableFields }
 
+// listExportableFields mirrors view's catalog (subset) with the same
+// gh-compat aliases: forkCount/stargazerCount sit beside the legacy
+// forks/stargazers for one release cycle. See view/export.go.
 var listExportableFields = []string{
 	"archived",
 	"createdAt",
 	"defaultBranch",
 	"description",
 	"fork",
+	"forkCount",
 	"forks",
 	"fullName",
 	"isPrivate",
@@ -28,6 +32,7 @@ var listExportableFields = []string{
 	"name",
 	"owner",
 	"pushedAt",
+	"stargazerCount",
 	"stargazers",
 	"topics",
 	"updatedAt",
@@ -43,23 +48,25 @@ func (exporter) Filter(v any) (any, error) {
 	out := make([]map[string]any, 0, len(rs))
 	for _, r := range rs {
 		out = append(out, map[string]any{
-			"archived":      r.Archived,
-			"createdAt":     r.CreatedAt,
-			"defaultBranch": r.DefaultBranch,
-			"description":   r.Description,
-			"fork":          r.Fork,
-			"forks":         r.Forks,
-			"fullName":      r.FullName,
-			"isPrivate":     r.Private,
-			"language":      r.Language,
-			"name":          r.Name,
-			"owner":         map[string]any{"login": r.Owner.Login, "type": r.Owner.Type},
-			"pushedAt":      r.PushedAt,
-			"stargazers":    r.Stargazers,
-			"topics":        r.Topics,
-			"updatedAt":     r.UpdatedAt,
-			"url":           r.HTMLURL,
-			"visibility":    visibilityField(&r),
+			"archived":       r.Archived,
+			"createdAt":      r.CreatedAt,
+			"defaultBranch":  r.DefaultBranch,
+			"description":    r.Description,
+			"fork":           r.Fork,
+			"forkCount":      r.Forks,
+			"forks":          r.Forks,
+			"fullName":       r.FullName,
+			"isPrivate":      r.Private,
+			"language":       r.Language,
+			"name":           r.Name,
+			"owner":          map[string]any{"login": r.Owner.Login, "type": r.Owner.Type},
+			"pushedAt":       r.PushedAt,
+			"stargazerCount": r.Stargazers,
+			"stargazers":     r.Stargazers,
+			"topics":         r.Topics,
+			"updatedAt":      r.UpdatedAt,
+			"url":            r.HTMLURL,
+			"visibility":     visibilityField(&r),
 		})
 	}
 	return out, nil

@@ -100,6 +100,41 @@ func TestViewJSONExport(t *testing.T) {
 	}
 }
 
+// TestViewJSONGhCompatAliases confirms B2: ported gh scripts requesting
+// `forkCount`, `stargazerCount`, `watcherCount` see the same numbers as
+// the legacy `forks`/`stargazers`/`watchers`. Without the aliases the
+// JSON projection emits the field with a `null` value.
+func TestViewJSONGhCompatAliases(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/octo/hello", 200, repos.Repo{
+		Name:          "hello",
+		FullName:      "octo/hello",
+		Owner:         repos.Owner{Login: "octo"},
+		DefaultBranch: "trunk",
+		Stargazers:    7,
+		Forks:         3,
+		Watchers:      11,
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		RepoArg:     "octo/hello",
+	}
+	opts.Exporter.JSONFields = "stargazerCount,forkCount,watcherCount"
+	opts.Exporter.JSONSet = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	for _, want := range []string{`"stargazerCount":7`, `"forkCount":3`, `"watcherCount":11`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--json projection missing %q; got %s", want, out)
+		}
+	}
+}
+
 func TestViewRejectsArgAndFlagCombo(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{

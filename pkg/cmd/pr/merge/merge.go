@@ -201,7 +201,7 @@ func Run(ctx context.Context, opts *options) error {
 		}
 		return fmt.Errorf("pr merge: %s", msg)
 	}
-	fmt.Fprintf(opts.IO.ErrOut, "%s Merged PR #%d (%s) at %s\n", opts.IO.SuccessIcon(), ref.Number, method, shortSHA(result.SHA))
+	fmt.Fprintf(opts.IO.ErrOut, "%s Merged PR #%d (%s) at %s\n", opts.IO.SuccessIcon(), ref.Number, method, shortSHA(result.CommitSHA()))
 
 	if opts.DeleteBranch {
 		if err := deleteBranch(ctx, pc, ref, pr); err != nil {
