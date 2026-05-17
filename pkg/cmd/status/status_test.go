@@ -230,3 +230,35 @@ func TestRunJSONExport(t *testing.T) {
 		t.Errorf("assigned_issues: %v", got["assigned_issues"])
 	}
 }
+
+// TestCollapseWarnings covers the audit A2 rollup. Identical errors
+// across multiple sections collapse to "every section: <error>";
+// distinct errors pass through unchanged.
+func TestCollapseWarnings(t *testing.T) {
+	t.Run("all four identical", func(t *testing.T) {
+		got := collapseWarnings([]string{
+			`assigned issues: token lacks scope "repo:read"`,
+			`assigned PRs: token lacks scope "repo:read"`,
+			`review requests: token lacks scope "repo:read"`,
+			`mentions: token lacks scope "repo:read"`,
+		})
+		if len(got) != 1 || got[0] != `every section: token lacks scope "repo:read"` {
+			t.Errorf("got %v", got)
+		}
+	})
+	t.Run("distinct stay distinct", func(t *testing.T) {
+		got := collapseWarnings([]string{
+			"assigned issues: timed out",
+			`mentions: token lacks scope "repo:read"`,
+		})
+		if len(got) != 2 {
+			t.Errorf("expected 2 warnings, got %v", got)
+		}
+	})
+	t.Run("nothing to collapse", func(t *testing.T) {
+		got := collapseWarnings(nil)
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
+}
