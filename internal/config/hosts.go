@@ -239,6 +239,12 @@ func NormalizeHost(host string) string {
 	if h == "" {
 		return ""
 	}
+	// C24: drop the default HTTPS port (`shithub.sh:443` → `shithub.sh`)
+	// so users pasting `Host:` headers from HTTP traces get a hosts.yml
+	// match instead of "no token configured for host". We intentionally
+	// do NOT strip `:80` or other ports — those are meaningful
+	// non-defaults that users explicitly opted into.
+	h = strings.TrimSuffix(h, ":443")
 	if !isValidHost(h) {
 		return ""
 	}
