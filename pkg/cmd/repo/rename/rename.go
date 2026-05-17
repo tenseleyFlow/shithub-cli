@@ -132,6 +132,25 @@ func Run(ctx context.Context, opts *options) error {
 	if has, _ := git.RemoteExists(opts.GitRunner, "", "origin"); !has {
 		return nil
 	}
+
+	// CX2 guard: only rotate the CWD's origin if it actually points
+	// at the repo we just renamed. Without this check, running
+	// `repo rename foo -R owner/bar` from inside any unrelated git
+	// working tree silently overwrites that tree's origin to point at
+	// owner/bar — the kind of bug that loses work for users running
+	// shithub commands inside their own project directories.
+	cur, cerr := git.ResolveRemote("", "origin")
+	if cerr != nil {
+		fmt.Fprintf(opts.IO.ErrOut, "note: origin not updated (could not parse current URL): %v\n", cerr)
+		return nil
+	}
+	if !strings.EqualFold(cur.Owner, ref.Owner) || !strings.EqualFold(cur.Repo, ref.Name) {
+		fmt.Fprintf(opts.IO.ErrOut,
+			"note: origin not updated; this directory's origin points at %s, not %s/%s\n",
+			cur.String(), ref.Owner, ref.Name)
+		return nil
+	}
+
 	protocol := "https"
 	if opts.GitProtocol != nil {
 		protocol = opts.GitProtocol()
