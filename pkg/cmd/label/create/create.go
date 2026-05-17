@@ -98,16 +98,26 @@ func Run(ctx context.Context, opts *options) error {
 	in := labels.CreateInput{Name: opts.Name, Color: color, Description: opts.Description}
 	created, err := lc.Create(ctx, ref.Owner, ref.Name, in)
 	if err != nil {
-		if opts.Force && isAlreadyExists(err) {
-			edited, eerr := lc.Edit(ctx, ref.Owner, ref.Name, opts.Name, labels.EditInput{
-				Color:       ptr(color),
-				Description: ptr(opts.Description),
-			})
-			if eerr != nil {
-				return eerr
+		if isAlreadyExists(err) {
+			if opts.Force {
+				edited, eerr := lc.Edit(ctx, ref.Owner, ref.Name, opts.Name, labels.EditInput{
+					Color:       ptr(color),
+					Description: ptr(opts.Description),
+				})
+				if eerr != nil {
+					return eerr
+				}
+				fmt.Fprintf(opts.IO.ErrOut, "%s Overwrote label %s\n", opts.IO.SuccessIcon(), edited.Name)
+				return nil
 			}
-			fmt.Fprintf(opts.IO.ErrOut, "%s Overwrote label %s\n", opts.IO.SuccessIcon(), edited.Name)
-			return nil
+			// Audit A13: the raw "shithub API: 409 label name already
+			// taken" string is hostile UX (especially on fresh repos
+			// where the server pre-seeds the GitHub default set, so
+			// `label create bug` 409s every time). Surface the
+			// situation in plain English; the --force hint nudges
+			// users toward the overwrite path when they meant it.
+			return fmt.Errorf("label %q already exists on %s/%s; pass --force to overwrite",
+				opts.Name, ref.Owner, ref.Name)
 		}
 		return err
 	}
@@ -116,12 +126,13 @@ func Run(ctx context.Context, opts *options) error {
 }
 
 // isAlreadyExists reports whether the server's response indicates a
-// uniqueness conflict on label name. shithub returns 422 (validation
-// failed) for that case; the message text varies, so we classify by
-// status code.
+// uniqueness conflict on label name. The server historically returned
+// 422 (validation failed) for that case; the labels handler also
+// returns 409 Conflict on the unique-name violation now. Accept either
+// so the friendly-error path is robust across server versions.
 func isAlreadyExists(err error) bool {
 	var ae *api.APIError
-	if errors.As(err, &ae) && ae.StatusCode == 422 {
+	if errors.As(err, &ae) && (ae.StatusCode == 422 || ae.StatusCode == 409) {
 		return true
 	}
 	return false
