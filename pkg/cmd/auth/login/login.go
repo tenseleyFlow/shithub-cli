@@ -198,10 +198,13 @@ func runDeviceFlow(ctx context.Context, opts *Options, host string) error {
 		return mapDeviceErr("request device code", err)
 	}
 
-	verifyURL := code.VerificationURIComplete
-	if verifyURL == "" {
-		verifyURL = code.VerificationURI
-	}
+	// Open the bare verification_uri rather than the pre-filled
+	// verification_uri_complete: forcing the user to transcribe the
+	// short code closes the phishing-redirect window where a malicious
+	// link pre-fills an attacker's code and the user clicks Approve
+	// without reading. The consent page still validates the code, so
+	// the only cost here is ~5 seconds of typing.
+	verifyURL := code.VerificationURI
 	if err := devClient.ValidateVerificationURI(verifyURL); err != nil {
 		return fmt.Errorf("auth: %w", err)
 	}
@@ -255,15 +258,17 @@ func runDeviceFlow(ctx context.Context, opts *Options, host string) error {
 }
 
 // printDeviceCode renders the one-time user code + verification URL.
-// Lipgloss boxes look great but require ColorEnabled; ASCII fallback is
-// generic enough to read in CI logs too.
+// The "type this code" framing is deliberate — opening a pre-filled
+// URL is the device-flow phishing footgun, so we surface the code
+// prominently and frame the next step as a transcription.
 func printDeviceCode(ios *iostreams.IOStreams, userCode, verifyURL string) {
 	w := ios.ErrOut
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Authorization required.")
+	fmt.Fprintln(w, "  Authorization required. Type this code in your browser:")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Visit: "+verifyURL)
-	fmt.Fprintln(w, "  Code:  "+userCode)
+	fmt.Fprintln(w, "      "+userCode)
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  URL: "+verifyURL)
 	fmt.Fprintln(w)
 }
 
