@@ -117,6 +117,17 @@ func Run(ctx context.Context, opts *options) error {
 	}
 	rc := repos.NewClient(client)
 
+	// B4: detect the own-repo case up front so the user gets a clear
+	// message instead of the server's generic 422. We only consult the
+	// authenticated user when the caller hasn't passed --org (an org
+	// destination is, by definition, not "yourself").
+	if opts.Org == "" {
+		me, merr := client.CurrentUser(ctx)
+		if merr == nil && strings.EqualFold(me.Login, ref.Owner) {
+			return fmt.Errorf("repo fork: cannot fork your own repository (%s/%s); use --org to fork into an organization", ref.Owner, ref.Name)
+		}
+	}
+
 	in := repos.ForkInput{
 		Organization:      opts.Org,
 		Name:              opts.Name,
