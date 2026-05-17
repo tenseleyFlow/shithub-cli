@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/api"
 )
@@ -225,22 +226,27 @@ func (c *Client) DeleteOrgVariable(ctx context.Context, org, name string) error 
 	return c.api.REST(ctx, http.MethodDelete, path, nil, nil)
 }
 
-// validateName rejects names containing path separators / wildcards so
-// a malformed name can't escape the secret namespace via traversal.
-// Match GitHub's spec: alphanumeric + underscore, can't start with a
-// digit, can't start with GITHUB_.
+// validateName enforces GitHub Actions secret-name rules. Match gh /
+// GitHub: ^[A-Z_][A-Z0-9_]*$, can't start with GITHUB_, no
+// lowercase (C-audit C25). The pre-D3d implementation accepted
+// lowercase silently which then mismatched gh-compat scripts.
 func validateName(name string) error {
 	if name == "" {
 		return errors.New("secrets: name is required")
 	}
-	for _, r := range name {
+	if strings.HasPrefix(name, "GITHUB_") {
+		return fmt.Errorf("secrets: name %q is reserved (cannot start with GITHUB_)", name)
+	}
+	for i, r := range name {
 		switch {
 		case r >= 'A' && r <= 'Z':
-		case r >= 'a' && r <= 'z':
-		case r >= '0' && r <= '9':
 		case r == '_':
+		case r >= '0' && r <= '9':
+			if i == 0 {
+				return fmt.Errorf("secrets: name %q cannot start with a digit", name)
+			}
 		default:
-			return fmt.Errorf("secrets: invalid character %q in name %q (allowed: A-Z, a-z, 0-9, _)", r, name)
+			return fmt.Errorf("secrets: invalid character %q in name %q (allowed: A-Z, 0-9, _)", r, name)
 		}
 	}
 	return nil
