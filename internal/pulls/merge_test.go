@@ -38,6 +38,37 @@ func TestMergeSquash(t *testing.T) {
 	}
 }
 
+// TestMergeCommitSHA_GhCompat confirms the decoder accepts gh's
+// `merge_commit_sha` field and exposes it through CommitSHA(). The
+// CLI success line went blank on shithub server builds that emitted
+// only this field (B-audit B1).
+func TestMergeCommitSHA_GhCompat(t *testing.T) {
+	srv := fakeapi.New(t)
+	srv.Handle(http.MethodPut, "/api/v1/repos/o/r/pulls/1/merge", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"merged":true,"merge_commit_sha":"feedface"}`))
+	})
+
+	c := NewClient(srv.NewClient())
+	out, err := c.Merge(context.Background(), "o", "r", 1, MergeInput{MergeMethod: MergeMerge}, false)
+	if err != nil {
+		t.Fatalf("Merge: %v", err)
+	}
+	if got := out.CommitSHA(); got != "feedface" {
+		t.Errorf("CommitSHA: got %q, want feedface (raw: %+v)", got, out)
+	}
+}
+
+// TestMergeCommitSHA_PrefersGhCompat: when both fields are populated
+// (legacy + gh-compat), the gh-compat name wins so the CLI doesn't
+// display two different shas across server versions.
+func TestMergeCommitSHA_PrefersGhCompat(t *testing.T) {
+	r := &MergeResult{SHA: "legacy", MergeCommitSHA: "ghcompat"}
+	if r.CommitSHA() != "ghcompat" {
+		t.Errorf("CommitSHA: got %q, want ghcompat", r.CommitSHA())
+	}
+}
+
 func TestMergeAdminHeader(t *testing.T) {
 	srv := fakeapi.New(t)
 	var seen string
