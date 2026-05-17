@@ -45,10 +45,7 @@ func (f *fakeClock) Sleep(ctx context.Context, d time.Duration) error {
 		f.sleeps = append(f.sleeps, d)
 		f.now = f.now.Add(d)
 	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	return nil
+	return ctx.Err()
 }
 
 func TestRequestCodeHappyPath(t *testing.T) {
