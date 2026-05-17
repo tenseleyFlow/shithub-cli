@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package token implements `shithub auth token`. Prints the stored token
-// for a host to stdout (no trailing newline). Used as a building block by
-// git credential helpers and by shell pipelines that need the raw bearer.
+// for a host to stdout, terminated with a newline (gh-compat C4). Used
+// as a building block by git credential helpers and by shell pipelines
+// that need the raw bearer.
 package token
 
 import (
@@ -35,7 +36,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "token",
 		Short: "Print the authenticated token for a host",
-		Long: `Print the stored token for a host (no trailing newline).
+		Long: `Print the stored token for a host, terminated with a newline.
 
 Useful when shell-scripting against the shithub REST API or when
 configuring a git credential helper manually:
@@ -68,7 +69,7 @@ func Run(ctx context.Context, opts *Options) error {
 		}
 		return err
 	}
-	if _, err := opts.IO.Out.Write([]byte(token)); err != nil {
+	if _, err := fmt.Fprintln(opts.IO.Out, token); err != nil {
 		return err
 	}
 	_ = ctx

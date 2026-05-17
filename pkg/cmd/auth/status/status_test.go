@@ -23,13 +23,37 @@ func newOpts(t *testing.T) (*Options, *cmdutiltest.Factory) {
 	}, tf
 }
 
-func TestStatusEmptyHostsExitsZero(t *testing.T) {
-	opts, tf := newOpts(t)
-	if err := Run(context.Background(), opts); err != nil {
-		t.Fatalf("Run: %v", err)
+// TestStatusEmptyHostsExitsNonZero is the C2 regression: previously
+// `auth status` with no hosts configured exited 0 with a stdout/stderr
+// message — CI gating on `shithub auth status >/dev/null` silently
+// succeeded. Now it errors so the exit code matches the message.
+func TestStatusEmptyHostsExitsNonZero(t *testing.T) {
+	opts, _ := newOpts(t)
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when no hosts configured")
 	}
-	if !strings.Contains(tf.ErrOut.String(), "no hosts configured") {
-		t.Errorf("expected empty-state hint, got %q", tf.ErrOut.String())
+	if !strings.Contains(err.Error(), "no hosts configured") {
+		t.Errorf("error should mention no hosts configured; got: %v", err)
+	}
+}
+
+// TestStatusUnknownHostnameExitsNonZero is the C3 regression: passing
+// --hostname for a host that isn't in hosts.yml said "no hosts
+// configured" (misleading: there ARE hosts, just not that one) and
+// exited 0. Now it errors with a hostname-specific message.
+func TestStatusUnknownHostnameExitsNonZero(t *testing.T) {
+	opts, tf := newOpts(t)
+	tf.Config.Hosts.Get("shithub.sh").User = "mf"
+	_ = tf.Config.Hosts.Save()
+	opts.Hostname = "example.com"
+
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when --hostname is not configured")
+	}
+	if !strings.Contains(err.Error(), "not logged into example.com") {
+		t.Errorf("error should name the missing host; got: %v", err)
 	}
 }
 
