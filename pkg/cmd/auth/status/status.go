@@ -94,6 +94,20 @@ func Run(ctx context.Context, opts *Options) error {
 		opts.Hostname = h
 	}
 
+	// C2/C3 (D-audit): both "no hosts configured" and "asked for a
+	// host that isn't configured" previously printed a message and
+	// returned nil — script-friendly false-pass risk (CI gating on
+	// `shithub auth status >/dev/null 2>&1` silently succeeded).
+	// Make both error so the non-zero exit matches the stderr line.
+	if len(hosts) == 0 {
+		return errors.New("auth: no hosts configured. Run `shithub auth login` to add one")
+	}
+	if opts.Hostname != "" {
+		if _, ok := hosts[opts.Hostname]; !ok {
+			return fmt.Errorf("auth: not logged into %s", opts.Hostname)
+		}
+	}
+
 	rows := collect(ctx, opts, hosts)
 
 	if opts.Active {
@@ -162,12 +176,10 @@ func collect(ctx context.Context, opts *Options, hosts config.Hosts) []HostStatu
 	return out
 }
 
-// writeHuman renders the table-of-hosts shape gh users expect.
+// writeHuman renders the table-of-hosts shape gh users expect. The
+// empty-rows case is now caught earlier in Run and returned as an
+// error — see the C2/C3 guard there.
 func writeHuman(ios *iostreams.IOStreams, rows []HostStatus, showToken bool, ks config.KeyringStore, hosts config.Hosts) error {
-	if len(rows) == 0 {
-		fmt.Fprintln(ios.ErrOut, "auth: no hosts configured. Run `shithub auth login` to add one.")
-		return nil
-	}
 	for i, r := range rows {
 		if i > 0 {
 			fmt.Fprintln(ios.Out)
