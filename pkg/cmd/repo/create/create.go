@@ -147,7 +147,16 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 
-	fmt.Fprintf(opts.IO.ErrOut, "%s Created repository %s\n", opts.IO.SuccessIcon(), created.HTMLURL)
+	// Success line — prefer the server-provided html_url, but fall back
+	// to "<owner>/<name> on <host>" when the server skipped that field
+	// (audit A11: shithub's create response doesn't currently carry it,
+	// so the gh-style URL form is unrenderable). The fallback also
+	// behaves well if a future server downgrade drops the URL.
+	createdLabel := created.HTMLURL
+	if createdLabel == "" {
+		createdLabel = created.FullName + " on " + host
+	}
+	fmt.Fprintf(opts.IO.ErrOut, "%s Created repository %s\n", opts.IO.SuccessIcon(), createdLabel)
 
 	if opts.Source != "" {
 		if err := wireSource(opts, created); err != nil {
