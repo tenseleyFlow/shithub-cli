@@ -26,6 +26,19 @@ func TestParseRepoArg(t *testing.T) {
 		{"", false, "", "", ""},
 		{"a/b/c/d", false, "", "", ""},
 		{"/x", false, "", "", ""},
+		// C-audit C17: `.git` suffix is stripped on bare forms so
+		// `git remote get-url origin | xargs -I{} shithub ... -R {}`
+		// works.
+		{"octo/hello.git", true, "octo", "hello", ""},
+		{"shithub.sh/octo/hello.git", true, "octo", "hello", "shithub.sh"},
+		// C-audit C16: HTTPS URL forms (with and without .git suffix).
+		{"https://shithub.sh/octo/hello", true, "octo", "hello", "shithub.sh"},
+		{"https://shithub.sh/octo/hello.git", true, "octo", "hello", "shithub.sh"},
+		// C-audit C16: SCP-style git@ remote URLs.
+		{"git@shithub.sh:octo/hello.git", true, "octo", "hello", "shithub.sh"},
+		{"git@shithub.sh:octo/hello", true, "octo", "hello", "shithub.sh"},
+		// Defense: malformed URL surfaces a clear error.
+		{"https://shithub.sh/onlyowner", false, "", "", ""},
 	}
 	for _, tc := range cases {
 		got, err := ParseRepoArg(tc.in)

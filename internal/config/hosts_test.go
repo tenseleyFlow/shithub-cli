@@ -279,6 +279,12 @@ func TestNormalizeHost(t *testing.T) {
 		"shithub.sh:8443":     "shithub.sh:8443",
 		"[::1]":               "[::1]",
 		"[::1]:8443":          "[::1]:8443",
+		// C-audit C24: explicit `:443` (HTTPS default) is normalized
+		// off so users pasting Host headers from HTTP traces hit the
+		// hosts.yml entry. Non-default ports must survive.
+		"shithub.sh:443":         "shithub.sh",
+		"https://shithub.sh:443": "shithub.sh",
+		"SHITHUB.SH:443":         "shithub.sh",
 	}
 	for in, want := range cases {
 		if got := NormalizeHost(in); got != want {
