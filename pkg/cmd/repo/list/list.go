@@ -47,6 +47,10 @@ type options struct {
 	Sort      string
 	Direction string
 	Limit     int
+	Web       bool
+
+	// Opener is overridden in tests.
+	Opener func(url string) error
 
 	Exporter output.Options
 }
@@ -58,6 +62,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		HTTPClient:  f.HTTPClient,
 		DefaultHost: f.DefaultHost,
 		Limit:       DefaultLimit,
+		Opener:      defaultOpener,
 	}
 	cmd := &cobra.Command{
 		Use:   "list [<owner>]",
@@ -81,7 +86,10 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Sort, "sort", "updated", "sort field: {created|updated|pushed|name}")
 	cmd.Flags().StringVar(&opts.Direction, "order", "desc", "sort order: {asc|desc}")
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of repositories to list (max 1000)")
+	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the repository list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
+	// TODO(D3a-followup): add output.MarkWebMutuallyExclusive(cmd)
+	// once D3a (output-web-mutex helper) lands on trunk.
 	return cmd
 }
 
@@ -103,6 +111,33 @@ func Run(ctx context.Context, opts *options) error {
 	host := opts.Hostname
 	if host == "" && opts.DefaultHost != nil {
 		host = opts.DefaultHost()
+	}
+
+	// C23: --web sends the user to the host's repo-list page for the
+	// supplied (or authenticated) user/org. gh has this flag; we
+	// were the odd ones out.
+	if opts.Web {
+		who := opts.Owner
+		if who == "" {
+			// Best-effort: defer to the host's "your repos" page;
+			// the server's UI handles the auth redirect.
+			who = "?tab=repositories"
+		}
+		base := "https://"
+		if host != "" {
+			base += host
+		}
+		var url string
+		if strings.HasPrefix(who, "?") {
+			url = base + "/" + who
+		} else {
+			url = base + "/" + who + "?tab=repositories"
+		}
+		fmt.Fprintf(opts.IO.ErrOut, "Opening %s in your browser.\n", url)
+		if opts.Opener == nil {
+			return nil
+		}
+		return opts.Opener(url)
 	}
 	client, err := opts.HTTPClient(host)
 	if err != nil {
@@ -248,3 +283,7 @@ func truncate(s string, n int) string {
 	}
 	return string(runes[:n-1]) + "…"
 }
+
+// defaultOpener is the prod-time no-op; iostreams will plumb a real
+// browser launcher in a later sprint. Tests override.
+var defaultOpener = func(_ string) error { return nil }

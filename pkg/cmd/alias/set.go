@@ -63,6 +63,11 @@ func setRun(_ context.Context, opts *setOptions) error {
 	if cfg.Aliases == nil {
 		cfg.Aliases = map[string]string{}
 	}
+	// C26: warn on overwrite so users notice when they typo over an
+	// existing alias. gh prints `! Changing alias X from Y to Z`.
+	if prev, ok := cfg.Aliases[opts.Name]; ok && prev != expansion {
+		fmt.Fprintf(opts.IO.ErrOut, "! Changing alias %s from %s to %s\n", opts.Name, prev, expansion)
+	}
 	cfg.Aliases[opts.Name] = expansion
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("alias: save: %w", err)
