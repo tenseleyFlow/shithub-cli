@@ -226,3 +226,59 @@ func readBody(r *http.Request) ([]byte, error) {
 		}
 	}
 }
+
+// TestCreate_SuccessLineUsesHTMLURL covers audit finding A11. When the
+// server returns a populated html_url the success line uses it
+// verbatim. The empty-URL branch (server downgrade case) is covered by
+// the companion test below.
+func TestCreate_SuccessLineUsesHTMLURL(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodPost, "/api/v1/user/repos", 201, repos.Repo{
+		Name: "x", FullName: "me/x", Owner: repos.Owner{Login: "me"},
+		HTMLURL: "https://shithub.sh/me/x", CloneURL: "https://shithub.sh/me/x.git",
+	})
+	opts := &options{
+		IO: tf.IOStreams, Prompter: tf.Prompt,
+		HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		NameArg:     "x", Public: true, Remote: "origin",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := tf.ErrOut.String()
+	if !strings.Contains(got, "Created repository https://shithub.sh/me/x") {
+		t.Errorf("success line missing html_url; got=%q", got)
+	}
+}
+
+// TestCreate_SuccessLineFallsBackToFullName covers the A11 fallback:
+// when the server's create response carries no html_url (current
+// shithub state pending S60 follow-up) the CLI must still print
+// something identifying — `<full_name> on <host>`. Without this guard
+// the dogfooded `v Created repository ` line had a trailing space and
+// no name, which was the original report.
+func TestCreate_SuccessLineFallsBackToFullName(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodPost, "/api/v1/user/repos", 201, repos.Repo{
+		Name: "x", FullName: "me/x", Owner: repos.Owner{Login: "me"},
+		// HTMLURL deliberately omitted.
+		CloneURL: "https://shithub.sh/me/x.git",
+	})
+	opts := &options{
+		IO: tf.IOStreams, Prompter: tf.Prompt,
+		HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		NameArg:     "x", Public: true, Remote: "origin",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := tf.ErrOut.String()
+	if !strings.Contains(got, "Created repository me/x on ") {
+		t.Errorf("success line should fall back to '<full_name> on <host>'; got=%q", got)
+	}
+	if strings.Contains(got, "Created repository \n") {
+		t.Errorf("A11 regression: success line printed with empty body; got=%q", got)
+	}
+}
