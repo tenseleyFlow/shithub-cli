@@ -37,21 +37,28 @@ type options struct {
 func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	opts := &options{IO: f.IOStreams}
 	cmd := &cobra.Command{
-		Use:   "completion -s <shell>",
+		Use:   "completion [shell]",
 		Short: "Print a shell completion script",
 		Long: `Generate a shell completion script for the named shell.
 
 Supported shells: bash, zsh, fish, powershell.
 
-To enable completions for the current shell session:
+The shell may be passed positionally (gh-style) or via -s/--shell.
 
-    bash:        source <(shithub completion -s bash)
-    zsh:         source <(shithub completion -s zsh)
-    fish:        shithub completion -s fish | source
-    powershell:  shithub completion -s powershell | Out-String | Invoke-Expression
+    bash:        source <(shithub completion bash)
+    zsh:         source <(shithub completion zsh)
+    fish:        shithub completion fish | source
+    powershell:  shithub completion powershell | Out-String | Invoke-Expression
 `,
-		Args: cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		// Audit A4: gh accepts the shell as a positional argument.
+		// Accept up to one positional; -s/--shell stays for script
+		// ports that depend on the flag form.
+		Args:      cobra.MaximumNArgs(1),
+		ValidArgs: supportedShells,
+		RunE: func(c *cobra.Command, args []string) error {
+			if len(args) == 1 && opts.Shell == "" {
+				opts.Shell = args[0]
+			}
 			return Run(c.Context(), c.Root(), opts)
 		},
 	}
