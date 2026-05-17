@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -126,16 +127,34 @@ func Run(ctx context.Context, opts *options) error {
 }
 
 // isAlreadyExists reports whether the server's response indicates a
-// uniqueness conflict on label name. The server historically returned
-// 422 (validation failed) for that case; the labels handler also
-// returns 409 Conflict on the unique-name violation now. Accept either
-// so the friendly-error path is robust across server versions.
+// uniqueness conflict on label name.
+//
+// C6 (audit regression of A13): the previous implementation treated
+// *any* 422 as a uniqueness conflict, which made length / charset /
+// color-format validation 422s render as "already exists; pass
+// --force" — actively misleading. Tightened to:
+//   - 409 always means uniqueness (clear status semantics)
+//   - 422 only if the server message names the uniqueness case
+//     ("already taken", "already exists", or "duplicate")
+//
+// Other 422s fall through to the raw server message via the default
+// error path, which is the correct behavior for length / charset /
+// color shape failures.
 func isAlreadyExists(err error) bool {
 	var ae *api.APIError
-	if errors.As(err, &ae) && (ae.StatusCode == 422 || ae.StatusCode == 409) {
+	if !errors.As(err, &ae) {
+		return false
+	}
+	if ae.StatusCode == 409 {
 		return true
 	}
-	return false
+	if ae.StatusCode != 422 {
+		return false
+	}
+	msg := strings.ToLower(ae.Message)
+	return strings.Contains(msg, "already taken") ||
+		strings.Contains(msg, "already exists") ||
+		strings.Contains(msg, "duplicate")
 }
 
 func ptr[T any](v T) *T { return &v }
