@@ -341,8 +341,15 @@ func TestLoginDeviceFlowOpensBrowserOnConsent(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(openedURL, "/login/device?user_code=ABCD-EFGH") {
-		t.Errorf("OpenBrowser called with %q, want the verification_uri_complete", openedURL)
+	// Open the bare verification_uri (no user_code in query) so the
+	// user has to transcribe the code on the consent page — pre-fill
+	// phishing protection. If the URL ever drifts back to
+	// verification_uri_complete this assertion will catch it.
+	if strings.Contains(openedURL, "user_code=") {
+		t.Errorf("OpenBrowser opened pre-filled URL %q; should open bare verification_uri", openedURL)
+	}
+	if !strings.HasSuffix(openedURL, "/login/device") {
+		t.Errorf("OpenBrowser called with %q, want bare verification_uri ending in /login/device", openedURL)
 	}
 }
 
