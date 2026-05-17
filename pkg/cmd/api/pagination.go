@@ -46,23 +46,37 @@ func runPaginated(ctx context.Context, opts *Options, client *api.Client, method
 	concat := []json.RawMessage{}
 	pages := []json.RawMessage{}
 
+	firstPage := true
 	for raw, err := range client.DoPaginated(ctx, method, endpoint, reqOpts...) {
 		if err != nil {
 			return err
 		}
 		if opts.Slurp {
 			pages = append(pages, raw)
+			firstPage = false
 			continue
 		}
-		// Try to extend the running concat slice with array elements; if
-		// the body isn't an array, fall back to emitting it as a single
-		// item so we never silently drop a page.
+		// C11: reject --paginate against a non-array endpoint. The
+		// pre-D3b behavior wrapped a single object in [obj] silently,
+		// which fooled scripts into believing they were paginating
+		// over a list (e.g., `api repos/o/r --paginate | jq '.[]'`
+		// emitted exactly one element no matter what). Surface the
+		// shape mismatch as soon as we see the first page; subsequent
+		// pages are an array by construction.
 		var arr []json.RawMessage
-		if err := json.Unmarshal(raw, &arr); err == nil {
-			concat = append(concat, arr...)
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			if firstPage {
+				return fmt.Errorf("api: --paginate requires a JSON array response; %s did not return one", endpoint)
+			}
+			// Defensive: a mid-stream non-array would be a server bug.
+			// Keep the legacy behavior (pass through as a single item)
+			// so we don't drop data; trust the first-page check above.
+			concat = append(concat, raw)
+			firstPage = false
 			continue
 		}
-		concat = append(concat, raw)
+		concat = append(concat, arr...)
+		firstPage = false
 	}
 
 	var assembled []byte
