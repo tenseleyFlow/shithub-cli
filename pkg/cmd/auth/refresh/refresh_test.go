@@ -23,6 +23,9 @@ func newOpts(t *testing.T, srv *httptest.Server) (*Options, *cmdutiltest.Factory
 	t.Helper()
 	tf := cmdutiltest.New(t)
 	tf.IOStreams.SetNeverPrompt(false)
+	// CI=true on GitHub Actions would trip the CI-refusal guard;
+	// dedicated tests that exercise it re-Setenv after.
+	t.Setenv("CI", "")
 	o := &Options{
 		IO:       tf.IOStreams,
 		Prompter: tf.Prompt,
@@ -273,5 +276,21 @@ func TestRefreshAmbiguousHostErrors(t *testing.T) {
 	err := Run(context.Background(), opts)
 	if err == nil || !strings.Contains(err.Error(), "multiple hosts configured") {
 		t.Errorf("err = %v, want 'multiple hosts configured'", err)
+	}
+}
+
+func TestRefreshRefusesUnderCI(t *testing.T) {
+	srv := stubDeviceFlow(t, "shithub_pat_x")
+	defer srv.Close()
+	opts, tf := newOpts(t, srv)
+	opts.Hostname = "shithub.sh"
+	hosts, _ := tf.Factory.Hosts()
+	hosts["shithub.sh"] = &config.HostEntry{User: "mf", OAuthToken: "old", InsecureStorage: true}
+	// Set CI *after* newOpts (which clears it).
+	t.Setenv("CI", "1")
+
+	err := Run(context.Background(), opts)
+	if err == nil || !strings.Contains(err.Error(), "CI=1") {
+		t.Errorf("err = %v, want CI refusal", err)
 	}
 }
