@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -183,6 +184,9 @@ func runDeviceFlow(ctx context.Context, opts *Options, host string) error {
 	if opts.IO.NeverPrompt() {
 		return errors.New("auth: device flow needs an interactive terminal; use --with-token in non-interactive contexts")
 	}
+	if v := strings.TrimSpace(os.Getenv("CI")); v != "" && v != "false" && v != "0" {
+		return errors.New("auth: refusing device flow under CI=" + v + "; use --with-token <file> in CI environments")
+	}
 
 	devClient, err := opts.NewDeviceClient(host)
 	if err != nil {
@@ -197,6 +201,9 @@ func runDeviceFlow(ctx context.Context, opts *Options, host string) error {
 	verifyURL := code.VerificationURIComplete
 	if verifyURL == "" {
 		verifyURL = code.VerificationURI
+	}
+	if err := devClient.ValidateVerificationURI(verifyURL); err != nil {
+		return fmt.Errorf("auth: %w", err)
 	}
 	printDeviceCode(opts.IO, code.UserCode, verifyURL)
 
