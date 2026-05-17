@@ -27,6 +27,20 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "cache <command>",
 		Short: "Manage GitHub-Actions-compatible cache entries",
+		// C-audit C18: without an explicit Args/RunE on the parent,
+		// `shithub cache totally-not-a-real-subcmd` printed the
+		// parent's help and exited 0. CI scripts running an unknown
+		// subcommand against an older binary silently no-op'd. Reject
+		// any positional that didn't match a registered subcommand.
+		Args: func(c *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("unknown subcommand %q for %q", args[0], c.CommandPath())
+			}
+			return nil
+		},
+		RunE: func(c *cobra.Command, _ []string) error {
+			return c.Help()
+		},
 	}
 	cmd.AddCommand(cachelist.NewCmd(f))
 	cmd.AddCommand(newDeferredStub("delete", "Delete a cache entry (deferred until shithub-S41g)"))
