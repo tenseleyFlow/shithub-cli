@@ -74,6 +74,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the repository in the browser")
 	cmd.Flags().StringVarP(&opts.Branch, "branch", "b", "", "branch to view the README from (default: default branch)")
 	output.AddFlags(cmd, &opts.Exporter)
+	output.MarkWebMutuallyExclusive(cmd)
 	return cmd
 }
 

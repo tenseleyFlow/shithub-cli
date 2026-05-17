@@ -88,6 +88,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of issues to fetch")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the issues list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
+	output.MarkWebMutuallyExclusive(cmd)
 	return cmd
 }
 

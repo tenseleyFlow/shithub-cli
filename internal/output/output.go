@@ -110,6 +110,22 @@ func (o Options) Active() bool {
 	return o.JSONSet || o.JQ != "" || o.Template != ""
 }
 
+// MarkWebMutuallyExclusive declares the standard output flags
+// (--json, --jq, --template) incompatible with --web on cmd. Call
+// from any builder that has both — without this, cobra silently lets
+// both groups coexist and runtime picks --web, discarding the
+// machine-readable request. The C-audit (C5, C15) flagged exactly
+// this footgun.
+//
+// Three independent pair-wise calls (rather than one quadruple call)
+// so cobra still allows the existing legal combinations among
+// --json / --jq / --template.
+func MarkWebMutuallyExclusive(cmd *cobra.Command) {
+	cmd.MarkFlagsMutuallyExclusive("web", FlagJSON)
+	cmd.MarkFlagsMutuallyExclusive("web", FlagJQ)
+	cmd.MarkFlagsMutuallyExclusive("web", FlagTemplate)
+}
+
 // validate enforces mutual exclusion across --jq / --template against
 // each other. --json may combine with --jq or --template because it
 // drives the *projection*; jq/template format the projection.

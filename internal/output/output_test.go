@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // fakeExporter projects the supplied data through json.Marshal-friendly
@@ -203,4 +205,56 @@ func TestDefaultTemplateFuncs(t *testing.T) {
 	if got := funcs["color"].(func(string, string) string)("red", "x"); got != "x" {
 		t.Errorf("color stub: got %q", got)
 	}
+}
+
+// TestMarkWebMutuallyExclusive: C-audit C5/C15. When a command has
+// both --web and the standard output flags, supplying both must be
+// rejected at parse time. Three pair-wise groups means --json + --jq
+// stays legal (existing legal combination).
+func TestMarkWebMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		wantErr bool
+	}{
+		{"web alone", []string{"--web"}, false},
+		{"json alone", []string{"--json", "id"}, false},
+		{"jq alone", []string{"--jq", ".id"}, false},
+		{"template alone", []string{"--template", "{{.id}}"}, false},
+		{"json+jq still legal", []string{"--json", "id", "--jq", ".id"}, false},
+		{"web + json rejected", []string{"--web", "--json", "id"}, true},
+		{"web + jq rejected", []string{"--web", "--jq", ".id"}, true},
+		{"web + template rejected", []string{"--web", "--template", "{{.id}}"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := newTestCmdWithWebAndOutput()
+			cmd.SetArgs(tc.args)
+			err := cmd.Execute()
+			gotErr := err != nil
+			if gotErr != tc.wantErr {
+				t.Errorf("err: got %v, wantErr=%v", err, tc.wantErr)
+			}
+			// cobra's group-message form: "if any flags in the group
+			// [a b] are set none of the others can be; [...] were all set"
+			if tc.wantErr && err != nil && !strings.Contains(err.Error(), "none of the others can be") {
+				t.Errorf("error should be cobra's mutex form; got: %v", err)
+			}
+		})
+	}
+}
+
+// newTestCmdWithWebAndOutput builds a no-op cobra command that has
+// both `--web` and the output flag set, with the mutex applied.
+func newTestCmdWithWebAndOutput() *cobra.Command {
+	var web bool
+	opts := &Options{}
+	cmd := &cobra.Command{
+		Use:  "x",
+		RunE: func(*cobra.Command, []string) error { return nil },
+	}
+	cmd.Flags().BoolVar(&web, "web", false, "")
+	AddFlags(cmd, opts)
+	MarkWebMutuallyExclusive(cmd)
+	return cmd
 }
