@@ -158,7 +158,7 @@ func NewClient(opts Options) (*Client, error) {
 		}
 	}
 	if host == "" {
-		host = parsed.Host
+		host = parsed.Hostname()
 	}
 
 	hc := opts.HTTPClient
@@ -202,6 +202,52 @@ func (c *Client) ClientID() string { return c.clientID }
 // Host returns the bare host the client is bound to. Used to render
 // post-login messages and verify-URI prefixes.
 func (c *Client) Host() string { return c.host }
+
+// ValidateVerificationURI rejects a verification_uri (or _complete) the
+// server returned if it doesn't point at the bound host over https. The
+// CLI hands the URL to the OS browser launcher; a phishing-aware server
+// (or a man-in-the-middle on a downgrade-friendly transport) could
+// otherwise redirect users to an attacker page that mimics the consent
+// screen. Validation is intentionally strict: scheme must be https, and
+// the URL's host must match c.host exactly (after stripping any port).
+//
+// The EnvInsecureHTTP escape hatch additionally allows http:// against
+// loopback addresses so the dev-server path keeps working.
+func (c *Client) ValidateVerificationURI(uri string) error {
+	if strings.TrimSpace(uri) == "" {
+		return errors.New("device: verification URI is empty")
+	}
+	u, err := url.Parse(uri)
+	if err != nil {
+		return fmt.Errorf("device: parse verification URI: %w", err)
+	}
+	if u.Hostname() != c.host {
+		return fmt.Errorf("device: verification URI host %q does not match bound host %q",
+			u.Hostname(), c.host)
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		if os.Getenv(EnvInsecureHTTP) == "1" && isLoopback(u.Hostname()) {
+			return nil
+		}
+		return fmt.Errorf("device: refusing http:// verification URI (%s); set %s=1 for loopback dev", uri, EnvInsecureHTTP)
+	default:
+		return fmt.Errorf("device: unsupported verification URI scheme %q", u.Scheme)
+	}
+}
+
+// isLoopback reports whether host names a loopback target the dev
+// escape hatch is allowed to open. Matches what dev environments
+// actually use; not an exhaustive list of every loopback form.
+func isLoopback(host string) bool {
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	}
+	return false
+}
 
 // RequestCode performs a single POST /login/device/code. scopes is a
 // space- or comma-separated list of scopes; empty means "default set".
