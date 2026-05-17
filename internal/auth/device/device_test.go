@@ -347,3 +347,47 @@ func TestTokenResponseScopesEmpty(t *testing.T) {
 		t.Errorf("Scopes() = %v, want empty", got)
 	}
 }
+
+func TestValidateVerificationURI(t *testing.T) {
+	c, err := NewClient(Options{Host: "shithub.sh"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	cases := []struct {
+		name    string
+		uri     string
+		wantErr string // substring expected in error (empty = success)
+	}{
+		{"https same host", "https://shithub.sh/login/device?user_code=ABCD-EFGH", ""},
+		{"https with port", "https://shithub.sh:443/login/device", ""},
+		{"http rejected", "http://shithub.sh/login/device", "refusing http://"},
+		{"foreign host", "https://evil.example/login/device", "does not match bound host"},
+		{"ftp scheme", "ftp://shithub.sh/x", "unsupported verification URI scheme"},
+		{"empty", "", "verification URI is empty"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := c.ValidateVerificationURI(tc.uri)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Errorf("err = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Errorf("err = %v, want substring %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateVerificationURIAllowsLoopbackHTTPWithEnv(t *testing.T) {
+	t.Setenv(EnvInsecureHTTP, "1")
+	c, err := NewClient(Options{BaseURL: "http://127.0.0.1:8080"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if err := c.ValidateVerificationURI("http://127.0.0.1:8080/login/device"); err != nil {
+		t.Errorf("err = %v, want nil for loopback http with override", err)
+	}
+}
