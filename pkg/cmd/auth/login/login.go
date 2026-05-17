@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package login implements `shithub auth login`. The v1 flow is token-
-// paste only: either via --with-token (stdin) or via an interactive
-// prompt that points the user at shithub.sh/settings/tokens. OAuth
-// device flow lands in C04a once shithub server-side support exists.
+// Package login implements `shithub auth login`. The default interactive
+// flow is RFC 8628 OAuth device authorization — the CLI requests a
+// short user code, opens the browser to the host's consent page, polls
+// until the user approves, and persists the resulting PAT. `--with-token`
+// preserves the headless stdin-paste path for CI / scripts.
 package login
 
 import (
@@ -17,6 +18,8 @@ import (
 
 	"github.com/tenseleyFlow/shithub-cli/internal/api"
 	"github.com/tenseleyFlow/shithub-cli/internal/auth"
+	"github.com/tenseleyFlow/shithub-cli/internal/auth/device"
+	"github.com/tenseleyFlow/shithub-cli/internal/browser"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/config"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
@@ -45,13 +48,30 @@ type Options struct {
 	GitProtocol string
 	// InsecureStorage forces persistence in hosts.yml (0600) rather than the keyring.
 	InsecureStorage bool
-	// WithToken reads from stdin instead of prompting interactively.
+	// WithToken reads from stdin instead of running the device flow.
 	WithToken bool
+	// Web explicitly opts in to the OAuth device flow. The flag exists
+	// for muscle-memory parity with gh; when neither WithToken nor Web
+	// is set the device flow is the default anyway.
+	Web bool
+	// Scopes is the comma- or space-separated scope set requested from
+	// the server. Empty means "the server's default set." Only honored
+	// on the device-flow path; --with-token tokens are minted on the
+	// settings page with whatever scopes the user picked there.
+	Scopes string
 
 	// NewCandidateClient builds the *api.Client used to call /api/v1/user
 	// for token validation. Production wires auth.NewCandidateClient;
 	// tests inject a fakeapi-backed builder.
 	NewCandidateClient func(host, token string) (*api.Client, error)
+	// NewDeviceClient builds the device-flow client bound to host.
+	// Tests inject a closure pointing at a httptest server; production
+	// wires device.NewClient. Leaving this nil disables the device-flow
+	// path so legacy tests that only exercise --with-token keep working.
+	NewDeviceClient func(host string) (*device.Client, error)
+	// OpenBrowser is the URL opener invoked during device flow. nil
+	// falls back to internal/browser.Open.
+	OpenBrowser func(url string) error
 }
 
 // NewCmd builds the cobra command and wires flags onto Options.
@@ -62,21 +82,25 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		Hosts:              f.Hosts,
 		Keyring:            f.Keyring,
 		NewCandidateClient: auth.NewCandidateClient,
+		NewDeviceClient: func(host string) (*device.Client, error) {
+			return device.NewClient(device.Options{Host: host})
+		},
+		OpenBrowser: browser.Open,
 	}
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate to a shithub host",
-		Long: `Authenticate by pasting (or piping) a personal access token (PAT).
+		Long: `Authenticate via OAuth device flow (default) or by piping a
+personal access token through stdin (--with-token).
 
-Mint a PAT at https://<host>/settings/tokens with the scopes you need
-(typically: repo:read, repo:write, user:read).
+Device flow prints a short user code, opens the browser to the host's
+consent page, polls until you approve, and stores the resulting token.
+
+--with-token reads a pre-minted PAT from stdin — useful in CI:
+    shithub auth login --with-token < ~/.shithub-token
 
 Tokens are stored in your system keyring by default. Pass --insecure-storage
-to write to ~/.config/shithub/hosts.yml (0600 perms) instead — useful on
-headless servers without a secret-service daemon.
-
-OAuth device flow (--web) ships in a follow-up sprint once shithub server
-support lands.`,
+to write to ~/.config/shithub/hosts.yml (0600 perms) instead.`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return Run(c.Context(), opts)
@@ -86,6 +110,8 @@ support lands.`,
 	cmd.Flags().StringVar(&opts.GitProtocol, "git-protocol", "", "default git protocol for this host: ssh or https")
 	cmd.Flags().BoolVar(&opts.InsecureStorage, "insecure-storage", false, "store the token in hosts.yml (0600) instead of the system keyring")
 	cmd.Flags().BoolVar(&opts.WithToken, "with-token", false, "read the token from stdin (e.g. shithub auth login --with-token < token.txt)")
+	cmd.Flags().BoolVar(&opts.Web, "web", false, "explicitly request the OAuth device-flow path (alias for the default)")
+	cmd.Flags().StringVarP(&opts.Scopes, "scopes", "s", "", "comma- or space-separated OAuth scopes to request (device flow only)")
 	return cmd
 }
 
@@ -105,10 +131,28 @@ func Run(ctx context.Context, opts *Options) error {
 	if opts.GitProtocol != "" && opts.GitProtocol != config.GitProtocolSSH && opts.GitProtocol != config.GitProtocolHTTPS {
 		return fmt.Errorf("auth: --git-protocol must be 'ssh' or 'https', got %q", opts.GitProtocol)
 	}
+	if opts.WithToken && opts.Web {
+		return errors.New("auth: --with-token and --web are mutually exclusive")
+	}
+	if opts.WithToken && opts.Scopes != "" {
+		return errors.New("auth: --scopes is a device-flow option; remove it or drop --with-token")
+	}
 
-	token, err := readToken(opts, host)
+	if opts.WithToken {
+		return runWithToken(ctx, opts, host)
+	}
+	return runDeviceFlow(ctx, opts, host)
+}
+
+// runWithToken handles the headless stdin-paste path.
+func runWithToken(ctx context.Context, opts *Options, host string) error {
+	data, err := io.ReadAll(opts.IO.In)
 	if err != nil {
-		return err
+		return fmt.Errorf("auth: read token from stdin: %w", err)
+	}
+	token := strings.TrimSpace(string(data))
+	if token == "" {
+		return errors.New("auth: --with-token received empty input on stdin")
 	}
 	if hint := tokenShapeHint(token); hint != "" {
 		fmt.Fprintln(opts.IO.ErrOut, opts.IO.WarningIcon()+" "+hint)
@@ -122,43 +166,115 @@ func Run(ctx context.Context, opts *Options) error {
 	if err != nil {
 		return fmt.Errorf("auth: token rejected by server (check that the PAT is current and unrevoked): %w", err)
 	}
-
 	if err := persist(opts, host, result.User, token, result.Scopes); err != nil {
 		return err
 	}
-
 	printSuccess(opts.IO, host, result.User.Login, result.Scopes, storageDestination(opts))
 	return nil
 }
 
-// readToken returns the candidate token, sourced from stdin (--with-token)
-// or an interactive password prompt.
-func readToken(opts *Options, host string) (string, error) {
-	if opts.WithToken {
-		data, err := io.ReadAll(opts.IO.In)
-		if err != nil {
-			return "", fmt.Errorf("auth: read token from stdin: %w", err)
-		}
-		token := strings.TrimSpace(string(data))
-		if token == "" {
-			return "", errors.New("auth: --with-token received empty input on stdin")
-		}
-		return token, nil
+// runDeviceFlow runs the RFC 8628 device authorization grant against
+// host. The post-Exchange validate-and-persist tail mirrors the
+// --with-token path so token storage is the single code path.
+func runDeviceFlow(ctx context.Context, opts *Options, host string) error {
+	if opts.NewDeviceClient == nil {
+		return errors.New("auth: device-flow client unavailable; rebuild the CLI or use --with-token")
+	}
+	if opts.IO.NeverPrompt() {
+		return errors.New("auth: device flow needs an interactive terminal; use --with-token in non-interactive contexts")
 	}
 
-	if opts.IO.NeverPrompt() {
-		return "", errors.New("auth: interactive prompt unavailable; use --with-token")
-	}
-	fmt.Fprintf(opts.IO.ErrOut, "Mint a personal access token at:\n  https://%s/settings/tokens\n\n", host)
-	token, err := opts.Prompter.Password("Paste your token:")
+	devClient, err := opts.NewDeviceClient(host)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("auth: build device client: %w", err)
 	}
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return "", errors.New("auth: empty token")
+
+	code, err := devClient.RequestCode(ctx, opts.Scopes)
+	if err != nil {
+		return mapDeviceErr("request device code", err)
 	}
-	return token, nil
+
+	verifyURL := code.VerificationURIComplete
+	if verifyURL == "" {
+		verifyURL = code.VerificationURI
+	}
+	printDeviceCode(opts.IO, code.UserCode, verifyURL)
+
+	openBrowser := opts.OpenBrowser
+	if openBrowser == nil {
+		openBrowser = browser.Open
+	}
+	consented, err := opts.Prompter.Confirm("Press Enter to open the browser", true)
+	if err != nil {
+		return fmt.Errorf("auth: confirm browser open: %w", err)
+	}
+	if consented {
+		if err := openBrowser(verifyURL); err != nil {
+			fmt.Fprintf(opts.IO.ErrOut, "%s couldn't open browser (%v); open the URL above manually.\n",
+				opts.IO.WarningIcon(), err)
+		}
+	} else {
+		fmt.Fprintln(opts.IO.ErrOut, "  Open the URL above in your browser to approve the request.")
+	}
+
+	fmt.Fprintln(opts.IO.ErrOut, "  Waiting for approval...")
+	tok, err := devClient.Poll(ctx, code)
+	if err != nil {
+		return mapDeviceErr("poll device token", err)
+	}
+
+	// Validate the freshly minted token so we know its owner before
+	// persisting — the device flow's token response doesn't carry user
+	// identity, and we need entry.User to be correct for git auth.
+	client, err := opts.NewCandidateClient(host, tok.AccessToken)
+	if err != nil {
+		return err
+	}
+	result, err := auth.Validate(ctx, client)
+	if err != nil {
+		return fmt.Errorf("auth: validate minted token: %w", err)
+	}
+
+	scopes := result.Scopes
+	if len(scopes) == 0 {
+		scopes = tok.Scopes() // fall back to the token-endpoint scopes
+	}
+
+	if err := persist(opts, host, result.User, tok.AccessToken, scopes); err != nil {
+		return err
+	}
+	printSuccess(opts.IO, host, result.User.Login, scopes, storageDestination(opts))
+	return nil
+}
+
+// printDeviceCode renders the one-time user code + verification URL.
+// Lipgloss boxes look great but require ColorEnabled; ASCII fallback is
+// generic enough to read in CI logs too.
+func printDeviceCode(ios *iostreams.IOStreams, userCode, verifyURL string) {
+	w := ios.ErrOut
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Authorization required.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Visit: "+verifyURL)
+	fmt.Fprintln(w, "  Code:  "+userCode)
+	fmt.Fprintln(w)
+}
+
+// mapDeviceErr surfaces the RFC 8628 sentinel errors with a hint
+// tailored to the user's likely next action.
+func mapDeviceErr(stage string, err error) error {
+	switch {
+	case errors.Is(err, device.ErrAccessDenied):
+		return errors.New("auth: the request was denied in the browser")
+	case errors.Is(err, device.ErrExpiredToken):
+		return errors.New("auth: the user code expired before approval; re-run `shithub auth login`")
+	case errors.Is(err, device.ErrUnauthorizedClient):
+		return errors.New("auth: this build's client_id is not allowlisted on the host; rebuild with SHITHUB_OAUTH_CLIENT_ID set or contact the admin")
+	case errors.Is(err, device.ErrInvalidScope):
+		return errors.New("auth: one or more requested scopes were rejected; check --scopes")
+	default:
+		return fmt.Errorf("auth: %s: %w", stage, err)
+	}
 }
 
 // persist writes the token to keyring or hosts.yml, updates HostEntry
@@ -255,6 +371,6 @@ func printSuccess(ios *iostreams.IOStreams, host, username string, scopes []stri
 	if len(scopes) > 0 {
 		fmt.Fprintf(ios.ErrOut, "  Token scopes:    %s\n", strings.Join(scopes, ", "))
 	} else {
-		fmt.Fprintf(ios.ErrOut, "  Token scopes:    (server did not advertise; see shithub S50 §1)\n")
+		fmt.Fprintf(ios.ErrOut, "  Token scopes:    (server did not advertise)\n")
 	}
 }
