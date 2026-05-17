@@ -30,11 +30,15 @@ func TestTokenPrintsStoredValue(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	got := tf.Out.String()
-	if got != "shithub_pat_xyz" {
-		t.Errorf("token output: want exact bytes, got %q", got)
+	// C4: token must end with a single newline. gh emits one; shell
+	// `read TOKEN` and line-oriented pipes assume one; the no-newline
+	// behavior was visibly bad ("shithub_pat_...$EXIT_CODE" butted
+	// against the next prompt char).
+	if got != "shithub_pat_xyz\n" {
+		t.Errorf("token output: want exact bytes %q, got %q", "shithub_pat_xyz\n", got)
 	}
-	if strings.HasSuffix(got, "\n") {
-		t.Errorf("token should have no trailing newline")
+	if !strings.HasSuffix(got, "\n") {
+		t.Errorf("token must end with a newline")
 	}
 }
 
