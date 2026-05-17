@@ -106,7 +106,10 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "the shithub host (default: configured host)")
 
 	cmd.Flags().StringVarP(&opts.descRaw, "description", "d", "", "description of the repository")
-	cmd.Flags().StringVarP(&opts.homepageRaw, "homepage", "h", "", "URL associated with the repository")
+	// --homepage has no short flag: "-h" collides with cobra's
+	// --help shorthand. See pkg/cmd/repo/create/create.go for the
+	// same rationale.
+	cmd.Flags().StringVar(&opts.homepageRaw, "homepage", "", "URL associated with the repository")
 	cmd.Flags().StringVar(&opts.branchRaw, "default-branch", "", "default branch name")
 	cmd.Flags().StringVar(&opts.visRaw, "visibility", "", "visibility: {public|private|internal}")
 
