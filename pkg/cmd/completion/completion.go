@@ -70,7 +70,11 @@ The shell may be passed positionally (gh-style) or via -s/--shell.
 // Run emits the completion script for opts.Shell to opts.IO.Out.
 func Run(_ context.Context, root *cobra.Command, opts *options) error {
 	if opts.Shell == "" {
-		return errors.New("completion: --shell is required (one of: " + listShells() + ")")
+		// C-audit C22: message text used to say "--shell is required",
+		// which conflicts with the help shape (`completion <shell>`).
+		// Match the help: positional is preferred, --shell is a script
+		// alias that lands at the same destination.
+		return errors.New("completion: shell is required (one of: " + listShells() + ")")
 	}
 	return generate(root, opts.IO.Out, opts.Shell, opts.NoDesc)
 }
