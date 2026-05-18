@@ -93,6 +93,9 @@ func NewCmd(f *cmdutil.Factory, opener func(string) error) *cobra.Command {
 
 // Run executes the search.
 func Run(ctx context.Context, opts *options) error {
+	if err := opts.Common.Validate(); err != nil {
+		return err
+	}
 	if opts.Merge && opts.NoMerge {
 		return fmt.Errorf("search commits: --merge and --no-merge are mutually exclusive")
 	}

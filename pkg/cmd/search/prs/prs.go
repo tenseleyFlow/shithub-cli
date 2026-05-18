@@ -96,6 +96,9 @@ func NewCmd(f *cmdutil.Factory, opener func(string) error) *cobra.Command {
 //
 //nolint:gocyclo // boolean-pair conflict checks + qualifier lowering
 func Run(ctx context.Context, opts *options) error {
+	if err := opts.Common.Validate(); err != nil {
+		return err
+	}
 	if opts.Issue.Archived && opts.Issue.NoArchived {
 		return fmt.Errorf("search prs: --archived and --no-archived are mutually exclusive")
 	}

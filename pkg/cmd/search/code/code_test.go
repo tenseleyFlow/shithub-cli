@@ -11,6 +11,7 @@ import (
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/search"
+	searchshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search/shared"
 )
 
 func TestCodeQualifiersAndSnippet(t *testing.T) {
@@ -36,6 +37,7 @@ func TestCodeQualifiersAndSnippet(t *testing.T) {
 		Query:       "TODO",
 		Filename:    "README.md",
 		Size:        ">100",
+		Common:      searchshared.CommonFlags{Limit: 30},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)

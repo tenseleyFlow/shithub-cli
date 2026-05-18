@@ -146,6 +146,7 @@ func TestListWebSkipsAPI(t *testing.T) {
 		Opener:      func(s string) error { opened = s; return nil },
 		Repo:        "o/r",
 		Web:         true,
+		Limit:       DefaultLimit,
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)

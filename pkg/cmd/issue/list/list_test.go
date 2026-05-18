@@ -112,12 +112,39 @@ func TestListWebSkipsAPI(t *testing.T) {
 		Opener:      func(s string) error { opened = s; return nil },
 		Repo:        "o/r",
 		Web:         true,
+		Limit:       DefaultLimit,
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if !strings.HasSuffix(opened, "/o/r/issues") {
 		t.Errorf("URL wrong: %q", opened)
+	}
+}
+
+// C9 regression: Run rejects nonsensical --limit values with the
+// gh-compatible "invalid limit: N" message instead of silently
+// coercing them away.
+func TestListRejectsInvalidLimit(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	cases := []int{0, -1, -100}
+	for _, n := range cases {
+		opts := &options{
+			IO:          tf.IOStreams,
+			HTTPClient:  tf.Factory.HTTPClient,
+			DefaultHost: tf.Factory.DefaultHost,
+			Opener:      func(string) error { return nil },
+			Repo:        "o/r",
+			Limit:       n,
+		}
+		err := Run(context.Background(), opts)
+		if err == nil {
+			t.Errorf("Limit=%d: want error, got nil", n)
+			continue
+		}
+		if !strings.Contains(err.Error(), "invalid limit:") {
+			t.Errorf("Limit=%d: got %q, want 'invalid limit:' prefix", n, err.Error())
+		}
 	}
 }
 

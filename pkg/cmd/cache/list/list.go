@@ -73,6 +73,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 
 // Run executes the listing.
 func Run(ctx context.Context, opts *options) error {
+	if err := cmdutil.ValidateLimit(opts.Limit); err != nil {
+		return err
+	}
 	resolver := repocmdshared.Resolver{
 		RepoFlag:    opts.Repo,
 		Hostname:    opts.Hostname,

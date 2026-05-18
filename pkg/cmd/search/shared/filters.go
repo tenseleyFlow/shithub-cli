@@ -5,6 +5,7 @@ package shared
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/search"
 )
 
@@ -25,6 +26,13 @@ func AddCommonFlags(cmd *cobra.Command, f *CommonFlags, sortDesc, orderDesc stri
 	cmd.Flags().StringVar(&f.Order, "order", "desc", orderDesc)
 	cmd.Flags().IntVarP(&f.Limit, "limit", "L", 30, "max items to return")
 	cmd.Flags().BoolVarP(&f.Web, "web", "w", false, "open the search results in a browser")
+}
+
+// Validate rejects nonsensical flag combinations before issuing a
+// request. Currently only `--limit`; if more cross-flag invariants
+// surface (e.g. mutually exclusive sort/order pairs) they belong here.
+func (f CommonFlags) Validate() error {
+	return cmdutil.ValidateLimit(f.Limit)
 }
 
 // ToOptions lowers CommonFlags into the search package's Options

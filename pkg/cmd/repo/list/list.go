@@ -101,8 +101,8 @@ func Run(ctx context.Context, opts *options) error {
 	if opts.Archived && opts.NoArchived {
 		return fmt.Errorf("repo list: --archived and --no-archived are mutually exclusive")
 	}
-	if opts.Limit <= 0 {
-		opts.Limit = DefaultLimit
+	if err := cmdutil.ValidateLimit(opts.Limit); err != nil {
+		return err
 	}
 	if opts.Limit > MaxLimit {
 		opts.Limit = MaxLimit

@@ -92,6 +92,9 @@ func bindIssueFlags(cmd *cobra.Command, f *searchshared.IssueFlags) {
 
 // Run executes the search.
 func Run(ctx context.Context, opts *options) error {
+	if err := opts.Common.Validate(); err != nil {
+		return err
+	}
 	if opts.Issue.Archived && opts.Issue.NoArchived {
 		return fmt.Errorf("search issues: --archived and --no-archived are mutually exclusive")
 	}

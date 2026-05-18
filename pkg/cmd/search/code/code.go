@@ -80,6 +80,9 @@ func NewCmd(f *cmdutil.Factory, opener func(string) error) *cobra.Command {
 
 // Run executes the search.
 func Run(ctx context.Context, opts *options) error {
+	if err := opts.Common.Validate(); err != nil {
+		return err
+	}
 	quals := []searchshared.Qualifier{
 		{Key: "filename", Value: opts.Filename},
 		{Key: "extension", Value: opts.Extension},
