@@ -49,6 +49,68 @@ func TestRenamePatchesName(t *testing.T) {
 	}
 }
 
+// C7: if the server returns 200 with the OLD name (the exact failure
+// mode the C-audit observed — `shithub repo rename foo/bar` printing
+// "Renamed to <old>" against a no-op response), the CLI must refuse
+// to claim success. The defensive check is case-insensitive because
+// lifecycle.Rename lowercases the server-side name.
+func TestRenameDetectsServerNoopAsError(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodPatch, "/api/v1/repos/o/old", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Server lies: 200 but the returned name is unchanged.
+		_ = json.NewEncoder(w).Encode(repos.Repo{
+			Name: "old", FullName: "o/old", Owner: repos.Owner{Login: "o"}, DefaultBranch: "trunk",
+		})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		RepoArg:     "o/old",
+		NewName:     "newname",
+		Yes:         true,
+		NoRemote:    true,
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when server returns the old name; got success")
+	}
+	if !strings.Contains(err.Error(), "newname") || !strings.Contains(err.Error(), "old") {
+		t.Errorf("error message should name both expected and returned name; got %q", err.Error())
+	}
+}
+
+// C7: case differences between requested and returned name don't count
+// as a mismatch (lifecycle.Rename lowercases on the server side).
+func TestRenameAcceptsLowercasedServerResponse(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodPatch, "/api/v1/repos/o/old", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(repos.Repo{
+			Name: "newname", FullName: "o/newname", Owner: repos.Owner{Login: "o"}, DefaultBranch: "trunk",
+		})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		RepoArg:     "o/old",
+		NewName:     "NewName",
+		Yes:         true,
+		NoRemote:    true,
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+}
+
 func TestRenameRejectsSameName(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{
