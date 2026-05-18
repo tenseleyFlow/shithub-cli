@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
+	searchshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search/shared"
 )
 
 func TestCommitsQualifiers(t *testing.T) {
@@ -29,6 +30,7 @@ func TestCommitsQualifiers(t *testing.T) {
 		Author:      "octocat",
 		NoMerge:     true,
 		Repo:        "o/r",
+		Common:      searchshared.CommonFlags{Limit: 30},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
