@@ -38,6 +38,7 @@ func TestIssuesSendsTypeIssueAndQualifiers(t *testing.T) {
 			Label:  []string{"bug"},
 			Locked: false, NoLocked: true,
 		},
+		Common: searchshared.CommonFlags{Limit: 30},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
