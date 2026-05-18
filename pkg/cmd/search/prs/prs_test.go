@@ -43,6 +43,7 @@ func TestPRsSendsTypePRAndExtras(t *testing.T) {
 		Merged:      true,
 		Checks:      "passing",
 		Base:        "trunk",
+		Common:      searchshared.CommonFlags{Limit: 30},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -63,8 +64,8 @@ func TestPRsMutexErrors(t *testing.T) {
 		name string
 		opts *options
 	}{
-		{"draft", &options{IO: tf.IOStreams, HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost, Opener: func(_ string) error { return nil }, Query: "x", Draft: true, NoDraft: true}},
-		{"merged", &options{IO: tf.IOStreams, HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost, Opener: func(_ string) error { return nil }, Query: "x", Merged: true, NoMerged: true}},
+		{"draft", &options{IO: tf.IOStreams, HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost, Opener: func(_ string) error { return nil }, Query: "x", Draft: true, NoDraft: true, Common: searchshared.CommonFlags{Limit: 30}}},
+		{"merged", &options{IO: tf.IOStreams, HTTPClient: tf.Factory.HTTPClient, DefaultHost: tf.Factory.DefaultHost, Opener: func(_ string) error { return nil }, Query: "x", Merged: true, NoMerged: true, Common: searchshared.CommonFlags{Limit: 30}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
