@@ -124,6 +124,14 @@ func Run(ctx context.Context, opts *options) error {
 	if err != nil {
 		return err
 	}
+	// C7 defensive check: if the server returns 200 with the old name
+	// (the audit's exact failure mode — silent no-op presenting as
+	// success), refuse to print "Renamed to <old>" and bubble an error
+	// so the user notices nothing changed. Comparison is
+	// case-insensitive because lifecycle.Rename lowercases server-side.
+	if !strings.EqualFold(renamed.Name, opts.NewName) {
+		return fmt.Errorf("rename: server returned name %q, expected %q", renamed.Name, opts.NewName)
+	}
 	fmt.Fprintf(opts.IO.ErrOut, "%s Renamed to %s\n", opts.IO.SuccessIcon(), renamed.FullName)
 
 	if opts.NoRemote || opts.GitRunner == nil {
