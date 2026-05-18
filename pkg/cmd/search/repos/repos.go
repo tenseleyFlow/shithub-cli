@@ -100,6 +100,9 @@ func NewCmd(f *cmdutil.Factory, opener func(string) error) *cobra.Command {
 //
 //nolint:gocyclo // flag → qualifier lowering is unavoidably long
 func Run(ctx context.Context, opts *options) error {
+	if err := opts.Common.Validate(); err != nil {
+		return err
+	}
 	if opts.Archived && opts.NoArchived {
 		return fmt.Errorf("search repos: --archived and --no-archived are mutually exclusive")
 	}

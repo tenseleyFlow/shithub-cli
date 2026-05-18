@@ -73,7 +73,7 @@ func TestRunWebOpensSearchURL(t *testing.T) {
 		DefaultHost: tf.Factory.DefaultHost,
 		Opener:      func(u string) error { opened = u; return nil },
 		Query:       "octocat",
-		Common:      searchshared.CommonFlags{Web: true},
+		Common:      searchshared.CommonFlags{Limit: 30, Web: true},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -96,6 +96,7 @@ func TestRunRendersEmptyResultsMessage(t *testing.T) {
 		DefaultHost: tf.Factory.DefaultHost,
 		Opener:      func(_ string) error { return nil },
 		Query:       "zzz",
+		Common:      searchshared.CommonFlags{Limit: 30},
 	}
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -114,6 +115,7 @@ func TestRunBadRangeBubblesUp(t *testing.T) {
 		Opener:      func(_ string) error { return nil },
 		Query:       "x",
 		Stars:       "not-a-range",
+		Common:      searchshared.CommonFlags{Limit: 30},
 	}
 	err := Run(context.Background(), opts)
 	if err == nil || !strings.Contains(err.Error(), "--stars") {
