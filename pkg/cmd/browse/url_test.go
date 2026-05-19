@@ -50,8 +50,21 @@ func TestComposeEmpty(t *testing.T) {
 func TestComposeNumberPrefersPR(t *testing.T) {
 	repo := repocmdshared.RepoRef{Host: "shithub.sh", Owner: "o", Name: "r"}
 	url, _ := Compose(TargetNumber, Components{Number: 42}, ComposeOptions{Repo: repo})
-	if url != "https://shithub.sh/o/r/pull/42" {
-		t.Errorf("default number → pull: %q", url)
+	// G4 (F32): plural `/pulls/{N}` — shithub's web app 404s on the
+	// singular `/pull/{N}` form gh uses.
+	if url != "https://shithub.sh/o/r/pulls/42" {
+		t.Errorf("default number → pulls: %q", url)
+	}
+}
+
+// G4 (F32): browse with "pr" hint must emit the plural `/pulls/{N}` route.
+// Pinned alongside the default case because both paths shared the same
+// pre-fix bug.
+func TestComposeNumberPRHintEmitsPlural(t *testing.T) {
+	repo := repocmdshared.RepoRef{Host: "shithub.sh", Owner: "o", Name: "r"}
+	url, _ := Compose(TargetNumber, Components{Number: 7, Hint: "pr"}, ComposeOptions{Repo: repo})
+	if url != "https://shithub.sh/o/r/pulls/7" {
+		t.Errorf("pr hint: %q want https://shithub.sh/o/r/pulls/7", url)
 	}
 }
 

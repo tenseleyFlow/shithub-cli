@@ -102,7 +102,7 @@ func TestReviewWebOpensURL(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/1/files") {
+	if !strings.HasSuffix(opened, "/o/r/pulls/1/files") {
 		t.Errorf("URL: %q", opened)
 	}
 }

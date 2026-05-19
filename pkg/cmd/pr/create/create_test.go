@@ -61,7 +61,7 @@ func TestCreateFlagDriven(t *testing.T) {
 		body = b
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(pulls.PR{Number: 7, HTMLURL: "https://shithub.sh/o/r/pull/7"})
+		_ = json.NewEncoder(w).Encode(pulls.PR{Number: 7, HTMLURL: "https://shithub.sh/o/r/pulls/7"})
 	})
 
 	opts := &options{
@@ -101,7 +101,7 @@ func TestCreateFillReadsCommits(t *testing.T) {
 		body = b
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(pulls.PR{Number: 1, HTMLURL: "https://shithub.sh/o/r/pull/1"})
+		_ = json.NewEncoder(w).Encode(pulls.PR{Number: 1, HTMLURL: "https://shithub.sh/o/r/pulls/1"})
 	})
 
 	// Run inside dir so CurrentBranch + Fill find the right commits.

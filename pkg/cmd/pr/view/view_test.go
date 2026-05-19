@@ -115,7 +115,9 @@ func TestViewWebSkipsAPI(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/1") {
-		t.Errorf("URL: %q", opened)
+	// G4 (F32): pr view --web must open /pulls/{N} (plural). Pre-fix
+	// it opened /pull/{N} (singular) and landed users on a 404.
+	if !strings.HasSuffix(opened, "/o/r/pulls/1") {
+		t.Errorf("URL: %q want suffix /o/r/pulls/1", opened)
 	}
 }

@@ -45,7 +45,7 @@ func TestBrowseNumberToPullURL(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/42") {
+	if !strings.HasSuffix(opened, "/o/r/pulls/42") {
 		t.Errorf("URL: %q", opened)
 	}
 }
@@ -165,7 +165,7 @@ func TestBrowseFallsBackOnOpenerFailure(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(tf.Out.String(), "/o/r/pull/42") {
+	if !strings.Contains(tf.Out.String(), "/o/r/pulls/42") {
 		t.Errorf("fallback URL should be on stdout: %q", tf.Out.String())
 	}
 	if !strings.Contains(tf.ErrOut.String(), "opener failed") {
@@ -223,7 +223,7 @@ func TestBrowseNumberPreservesPRWhenExists(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/42") {
+	if !strings.HasSuffix(opened, "/o/r/pulls/42") {
 		t.Errorf("expected pull URL when PR exists, got %q", opened)
 	}
 }
@@ -249,7 +249,7 @@ func TestBrowseNumberFallsBackOnDetectFailure(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/42") {
+	if !strings.HasSuffix(opened, "/o/r/pulls/42") {
 		t.Errorf("expected pull fallback on detect failure, got %q", opened)
 	}
 }

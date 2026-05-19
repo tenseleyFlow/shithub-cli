@@ -134,16 +134,19 @@ func Compose(target Target, comp Components, opts ComposeOptions) (string, error
 		}
 		return base, nil
 	case TargetNumber:
-		// gh maps a bare number to PR first, then issue. We emit /issues/N
-		// when the hint says "issue"; otherwise prefer /pull/N (shithub web
-		// route also accepts /issues/N for PRs as a fallback).
+		// gh maps a bare number to PR first, then issue. We emit
+		// /issues/N when the hint says "issue"; otherwise emit /pulls/N.
+		// G4 (F32): shithub's web app uses the plural `/pulls/` route —
+		// the singular `/pull/` is a 404. Pre-fix `browse pr/N` and the
+		// default bare-number path both built `/pull/N` and landed
+		// users on the error page.
 		switch comp.Hint {
 		case "issue":
 			return fmt.Sprintf("%s/issues/%d", base, comp.Number), nil
 		case "pr":
-			return fmt.Sprintf("%s/pull/%d", base, comp.Number), nil
+			return fmt.Sprintf("%s/pulls/%d", base, comp.Number), nil
 		default:
-			return fmt.Sprintf("%s/pull/%d", base, comp.Number), nil
+			return fmt.Sprintf("%s/pulls/%d", base, comp.Number), nil
 		}
 	case TargetSHA:
 		return fmt.Sprintf("%s/commit/%s", base, comp.SHA), nil
