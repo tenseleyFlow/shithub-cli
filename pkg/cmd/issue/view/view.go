@@ -18,6 +18,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
 	"github.com/tenseleyFlow/shithub-cli/internal/output"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
 )
@@ -108,6 +109,14 @@ func Run(ctx context.Context, opts *options) error {
 	ic := issues.NewClient(client)
 	issue, err := ic.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number)
 	if err != nil {
+		// E-audit E26: shared number space. A "not found" issue may
+		// actually be a PR; hint the user toward `shithub pr view`.
+		if api.IsNotFoundError(err) && ref.Number > 0 {
+			pc := pulls.NewClient(client)
+			if _, perr := pc.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number); perr == nil {
+				return fmt.Errorf("issue view: #%d is a pull request; try `shithub pr view %d`", ref.Number, ref.Number)
+			}
+		}
 		return err
 	}
 

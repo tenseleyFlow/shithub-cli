@@ -136,6 +136,16 @@ func Run(ctx context.Context, opts *options) error {
 
 	pr, err := pc.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number)
 	if err != nil {
+		// E-audit E26: shithub shares the number space between issues
+		// and PRs. A "not found" PR may actually be an issue; if so,
+		// hint the user toward `shithub issue view`. Best-effort —
+		// silent if the cross-check itself fails.
+		if api.IsNotFoundError(err) && ref.Number > 0 {
+			ic := issues.NewClient(client)
+			if _, perr := ic.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number); perr == nil {
+				return fmt.Errorf("pr view: #%d is an issue; try `shithub issue view %d`", ref.Number, ref.Number)
+			}
+		}
 		return err
 	}
 
