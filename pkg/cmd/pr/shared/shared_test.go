@@ -93,7 +93,10 @@ func TestFindPRByBranchNotFound(t *testing.T) {
 
 func TestPRWebURL(t *testing.T) {
 	ref := PRRef{Repo: repocmdshared.RepoRef{Host: "shithub.sh", Owner: "o", Name: "r"}, Number: 9}
-	if got := PRWebURL(ref); got != "https://shithub.sh/o/r/pull/9" {
+	// G4 (F32): shithub's web app serves PRs at the plural `/pulls/{N}` —
+	// the singular `/pull/{N}` gh-style route is a 404. Server `html_url`
+	// emits `/pulls/`, so the CLI's url builder must agree.
+	if got := PRWebURL(ref); got != "https://shithub.sh/o/r/pulls/9" {
 		t.Errorf("PRWebURL: %q", got)
 	}
 }
