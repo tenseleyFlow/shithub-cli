@@ -169,26 +169,41 @@ func Export(out io.Writer, opts Options, exporter Exporter, data any, prettyJSON
 		return nil
 	}
 
-	// Field validation against the exporter's catalogue.
+	// Field validation against the exporter's catalogue. Build the
+	// requested set in one pass so the post-Filter projection can
+	// reuse it without re-parsing the comma list.
+	var requestedSet map[string]struct{}
 	if opts.JSONFields != "" {
 		requested := strings.Split(opts.JSONFields, ",")
-		for i, r := range requested {
-			requested[i] = strings.TrimSpace(r)
-		}
+		requestedSet = make(map[string]struct{}, len(requested))
 		valid := map[string]struct{}{}
 		for _, f := range exporter.Fields() {
 			valid[f] = struct{}{}
 		}
 		for _, r := range requested {
+			r = strings.TrimSpace(r)
 			if _, ok := valid[r]; !ok {
 				return fmt.Errorf("unknown JSON field %q; valid: %s", r, strings.Join(exporter.Fields(), ", "))
 			}
+			requestedSet[r] = struct{}{}
 		}
 	}
 
 	filtered, err := exporter.Filter(data)
 	if err != nil {
 		return fmt.Errorf("output: filter: %w", err)
+	}
+
+	// G3 (F1): every exporter's Filter builds the full gh-compat field
+	// map regardless of what the user asked for. Pre-fix, that map went
+	// straight to JSON and the user got every field — `--json title`
+	// was decorative. Project here so the listing actually filters.
+	// Exporters that return something other than the standard
+	// map/[]map shapes pass through unchanged (they're already
+	// projecting themselves; the projection guard runs only when the
+	// shape is recognized).
+	if requestedSet != nil {
+		filtered = projectFields(filtered, requestedSet)
 	}
 
 	encoded, err := json.Marshal(filtered)
@@ -333,4 +348,40 @@ func defaultFuncs() template.FuncMap {
 			return strings.Join(parts, "\t") + "\n"
 		},
 	}
+}
+
+// projectFields trims map keys that aren't in the requested set,
+// recursing one level into slices so `[]map[string]any` (the listing
+// shape every list exporter returns) gets projected per-element.
+// Other shapes pass through unchanged — an exporter that returns a
+// scalar or a slice of strings is already self-projecting.
+func projectFields(v any, fields map[string]struct{}) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return projectMap(t, fields)
+	case []map[string]any:
+		out := make([]map[string]any, len(t))
+		for i, m := range t {
+			out[i] = projectMap(m, fields)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = projectFields(e, fields)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func projectMap(m map[string]any, fields map[string]struct{}) map[string]any {
+	out := make(map[string]any, len(fields))
+	for k := range fields {
+		if val, ok := m[k]; ok {
+			out[k] = val
+		}
+	}
+	return out
 }

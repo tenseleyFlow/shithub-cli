@@ -244,6 +244,117 @@ func TestMarkWebMutuallyExclusive(t *testing.T) {
 	}
 }
 
+// fullExporter mimics every command's real exporter: Filter ignores
+// the request and always builds a map of every field it knows about.
+// Pre-G3 Export emitted that whole map regardless of --json. The
+// projection tests rely on this no-op Filter so they can pin Export
+// itself as the projection site.
+type fullExporter struct {
+	fields []string
+}
+
+func (f fullExporter) Fields() []string { return f.fields }
+func (f fullExporter) Filter(v any) (any, error) {
+	// Echo back the value verbatim — it already carries every field.
+	return v, nil
+}
+
+// G3 (F1): --json projection must trim Filter output to the requested
+// field set. Pre-fix Export validated the field list and emitted the
+// full map anyway — `--json id` was decorative. Pins the contract on
+// both single-record (map) and listing ([]map) shapes.
+func TestExportProjectsToRequestedFields_SingleMap(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	exp := fullExporter{fields: []string{"id", "title", "body", "url"}}
+	data := map[string]any{
+		"id": 7, "title": "hello", "body": "long form", "url": "https://x",
+	}
+	opts := Options{JSONFields: "id,title", JSONSet: true}
+	if err := Export(&buf, opts, exp, data, false); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("want 2 keys, got %d: %v", len(got), got)
+	}
+	if _, ok := got["body"]; ok {
+		t.Errorf("body should be projected out: %v", got)
+	}
+	if _, ok := got["url"]; ok {
+		t.Errorf("url should be projected out: %v", got)
+	}
+}
+
+func TestExportProjectsToRequestedFields_ListOfMaps(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	exp := fullExporter{fields: []string{"id", "title", "body"}}
+	data := []map[string]any{
+		{"id": 1, "title": "a", "body": "aa"},
+		{"id": 2, "title": "b", "body": "bb"},
+	}
+	opts := Options{JSONFields: "title", JSONSet: true}
+	if err := Export(&buf, opts, exp, data, false); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	var got []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("want 2 rows, got %d", len(got))
+	}
+	for i, row := range got {
+		if len(row) != 1 {
+			t.Errorf("row[%d] should have 1 key, got %d: %v", i, len(row), row)
+		}
+		if _, ok := row["title"]; !ok {
+			t.Errorf("row[%d] missing title: %v", i, row)
+		}
+	}
+}
+
+// Projection respects requested ordering and is robust to whitespace
+// in the comma list (`--json id, title , body` is still legal).
+func TestExportProjectsHandlesWhitespace(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	exp := fullExporter{fields: []string{"id", "title", "body"}}
+	data := map[string]any{"id": 1, "title": "a", "body": "z"}
+	opts := Options{JSONFields: " id , body ", JSONSet: true}
+	if err := Export(&buf, opts, exp, data, false); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(buf.Bytes(), &got)
+	if len(got) != 2 {
+		t.Errorf("want 2 keys, got %d: %v", len(got), got)
+	}
+	if _, ok := got["title"]; ok {
+		t.Errorf("title should be projected out (only id, body requested): %v", got)
+	}
+}
+
+// Projection is skipped when no --json fields were requested (e.g.
+// the --jq path still needs the full document to filter against).
+func TestExportSkipsProjectionWithoutJSONFields(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	exp := fullExporter{fields: []string{"id", "title"}}
+	data := map[string]any{"id": 1, "title": "a"}
+	opts := Options{JQ: ".id"}
+	if err := Export(&buf, opts, exp, data, false); err != nil {
+		t.Fatalf("Export: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "1" {
+		t.Errorf("jq output: got %q want %q", got, "1")
+	}
+}
+
 // newTestCmdWithWebAndOutput builds a no-op cobra command that has
 // both `--web` and the output flag set, with the mutex applied.
 func newTestCmdWithWebAndOutput() *cobra.Command {

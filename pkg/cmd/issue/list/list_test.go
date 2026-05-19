@@ -102,6 +102,51 @@ func TestListJSONExport(t *testing.T) {
 	}
 }
 
+// G3 (F1): `--json number` must actually project — the response body
+// should contain ONLY the requested keys, not every field the
+// exporter happens to build. Pre-fix the listing emitted the full
+// gh-compat map and downstream `jq` pipelines broke on the unrequested
+// keys. Pins the contract at the command layer where the audit caught
+// it (output.Export's unit test pins the helper itself; this test
+// pins that the helper gets called from the daily-driver list code).
+func TestListJSONExportProjectsRequestedFieldsOnly(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/repos/o/r/issues", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]issues.Issue{
+			{Number: 1, Title: "t", State: "open", Body: "long body that should not surface"},
+		})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(string) error { return nil },
+		Repo:        "o/r",
+		State:       "open",
+		Limit:       DefaultLimit,
+	}
+	opts.Exporter.JSONFields = "number"
+	opts.Exporter.JSONSet = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	// number requested → present.
+	if !strings.Contains(out, `"number":1`) {
+		t.Errorf("number missing from projection: %s", out)
+	}
+	// title NOT requested → absent.
+	if strings.Contains(out, `"title"`) {
+		t.Errorf("title leaked into projection (only number requested): %s", out)
+	}
+	// body NOT requested → absent.
+	if strings.Contains(out, `"body"`) {
+		t.Errorf("body leaked into projection: %s", out)
+	}
+}
+
 // TestListRoundtrip_AuthorWireShape pins the wire-shape the CLI sends
 // for `--author`. F-audit F11 / F2 status table tracks the divergence:
 // the server expects `?author=` (and 422s on unknown user), the CLI
