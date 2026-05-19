@@ -153,13 +153,19 @@ func render(io *iostreams.IOStreams, resp *search.Response[search.CodeItem]) {
 	}
 }
 
-// snippet returns a single-line preview from the first text match,
-// collapsing internal whitespace so the table doesn't tear.
+// snippet returns a single-line preview, collapsing internal
+// whitespace so the table doesn't tear. G11 (F22): prefer the flat
+// `preview_line` field (what shithub emits today via ts_headline) and
+// fall back to TextMatches for forward-compat. Pre-fix the renderer
+// only looked at TextMatches and the snippet column was always empty.
 func snippet(it search.CodeItem) string {
-	if len(it.TextMatches) == 0 {
+	f := strings.TrimSpace(it.PreviewLine)
+	if f == "" && len(it.TextMatches) > 0 {
+		f = strings.TrimSpace(it.TextMatches[0].Fragment)
+	}
+	if f == "" {
 		return ""
 	}
-	f := strings.TrimSpace(it.TextMatches[0].Fragment)
 	f = strings.ReplaceAll(f, "\n", " ")
 	if len(f) > 80 {
 		f = f[:79] + "…"

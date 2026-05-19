@@ -44,6 +44,13 @@ type CodeMatch struct {
 	Repo        string      `json:"repo,omitempty"`
 	Score       float64     `json:"score,omitempty"`
 	TextMatches []TextMatch `json:"text_matches,omitempty"`
+	// PreviewLine is the single-line snippet shithub returns today.
+	// G11 (F22): the server emits `preview_line` (a flat string from
+	// `ts_headline`); pre-fix the CLI only looked at `text_matches`
+	// (the richer gh-shape) so the snippet column was always empty.
+	// We keep TextMatches for forward-compat with a future richer
+	// payload and prefer PreviewLine when TextMatches is unset.
+	PreviewLine string `json:"preview_line,omitempty"`
 }
 
 // CommitMatch is one entry from /search/commits.
