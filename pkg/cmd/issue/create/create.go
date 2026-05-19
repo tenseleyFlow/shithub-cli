@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -48,10 +49,13 @@ type options struct {
 	BodyFile  string
 	Labels    []string
 	Assignees []string
-	Milestone int
-	Template  string
-	Web       bool
-	Editor    bool
+	// MilestoneRef accepts either a numeric id or a milestone title;
+	// resolution happens at Run time against the live milestone list
+	// (E-audit E19 — gh accepts either form, we used to require an int).
+	MilestoneRef string
+	Template     string
+	Web          bool
+	Editor       bool
 }
 
 // NewCmd builds the cobra command.
@@ -84,7 +88,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "read issue body from file (use '-' for stdin)")
 	cmd.Flags().StringSliceVarP(&opts.Labels, "label", "l", nil, "label to apply (repeatable)")
 	cmd.Flags().StringSliceVarP(&opts.Assignees, "assignee", "a", nil, "assignee (@me supported, repeatable)")
-	cmd.Flags().IntVarP(&opts.Milestone, "milestone", "m", 0, "milestone number")
+	cmd.Flags().StringVarP(&opts.MilestoneRef, "milestone", "m", "", "milestone number or title")
 	cmd.Flags().StringVar(&opts.Template, "template", "", "issue template name (server feature; ignored if unsupported)")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the new-issue form in a browser")
 	cmd.Flags().BoolVar(&opts.Editor, "editor", false, "compose body via $EDITOR even when --body is set")
@@ -153,11 +157,14 @@ func Run(ctx context.Context, opts *options) error {
 		Labels:    issueshared.SplitList(opts.Labels),
 		Assignees: assignees,
 	}
-	if opts.Milestone > 0 {
-		in.Milestone = &opts.Milestone
+	ic := issues.NewClient(client)
+	if mid, err := resolveMilestone(ctx, ic, ref.Owner, ref.Name, opts.MilestoneRef); err != nil {
+		return err
+	} else if mid > 0 {
+		mid := mid
+		in.Milestone = &mid
 	}
 
-	ic := issues.NewClient(client)
 	created, err := ic.Create(ctx, ref.Owner, ref.Name, in)
 	if err != nil {
 		return err
@@ -168,6 +175,39 @@ func Run(ctx context.Context, opts *options) error {
 		fmt.Fprintf(opts.IO.Out, "%s/%s#%d\n", ref.Owner, ref.Name, created.Number)
 	}
 	return nil
+}
+
+// resolveMilestone turns the --milestone argument into the numeric id
+// the server expects. Empty input returns 0 (no milestone). A numeric
+// input passes through; non-numeric input lists the repo's milestones
+// (state=all) and matches case-insensitively by title.
+//
+// E-audit E19: pre-fix, --milestone was an int flag — `--milestone v1`
+// rejected the input with `strconv.ParseInt: parsing "v1"`. gh accepts
+// either form, and so should we.
+func resolveMilestone(ctx context.Context, ic *issues.Client, owner, repo, ref string) (int, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return 0, nil
+	}
+	if n, err := strconv.Atoi(ref); err == nil {
+		if n <= 0 {
+			return 0, fmt.Errorf("issue create: --milestone must be positive (got %d)", n)
+		}
+		return n, nil
+	}
+	list, err := ic.ListMilestones(ctx, owner, repo)
+	if err != nil {
+		return 0, fmt.Errorf("issue create: resolve milestone %q: %w", ref, err)
+	}
+	wantedLower := strings.ToLower(ref)
+	for _, m := range list {
+		if strings.EqualFold(m.Title, ref) {
+			return int(m.ID), nil
+		}
+		_ = wantedLower
+	}
+	return 0, fmt.Errorf("issue create: no milestone matches %q (case-insensitive title or numeric id)", ref)
 }
 
 // promptInteractive walks the user through title/body/labels/assignees.
