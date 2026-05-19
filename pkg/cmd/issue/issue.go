@@ -44,6 +44,9 @@ Common subcommands:
   transfer  transfer to another repo (server-side support pending)
   develop   create/link a branch to an issue (server-side support pending)
 `,
+		// E-audit E16: unknown subcommand → exit non-zero.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(createCmd.NewCmd(f))
 	cmd.AddCommand(listCmd.NewCmd(f))

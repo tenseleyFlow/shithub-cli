@@ -17,6 +17,10 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "org <command>",
 		Short: "Work with organizations",
+		// E-audit E16: error on unknown subcommand instead of cobra's
+		// silent help+exit-0 default.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(orglist.NewCmd(f))
 	cmd.AddCommand(orgview.NewCmd(f))
