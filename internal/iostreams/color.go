@@ -64,22 +64,25 @@ func (s *IOStreams) Italic(str string) string { return s.Color(styleItalic, str)
 // Underline styles s underlined.
 func (s *IOStreams) Underline(str string) string { return s.Color(styleUnderline, str) }
 
-// SuccessIcon returns a styled check mark when color is on, plain ASCII
-// fallback otherwise. Use for "operation succeeded" status lines so the
-// output looks right in both styled terminals and dumb pipes.
+// SuccessIcon returns the Unicode check mark, styled green when color
+// is on and plain otherwise. G12 (F39): pre-fix the no-color fallback
+// emitted ASCII `v` — gh-compat scripts piping `auth status` through
+// grep '✓' missed lines that should have matched. Unicode is the
+// canonical glyph; color is the optional styling.
 func (s *IOStreams) SuccessIcon() string {
 	if s.colorEnabled {
 		return s.Green("✓")
 	}
-	return "v"
+	return "✓"
 }
 
-// FailureIcon returns a styled x mark with the same TTY-aware fallback.
+// FailureIcon returns the Unicode cross mark with the same color rule.
+// See SuccessIcon for the rationale; pre-fix this emitted ASCII `X`.
 func (s *IOStreams) FailureIcon() string {
 	if s.colorEnabled {
 		return s.Red("✗")
 	}
-	return "X"
+	return "✗"
 }
 
 // WarningIcon returns the canonical warning glyph (an exclamation in a

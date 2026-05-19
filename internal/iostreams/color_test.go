@@ -60,11 +60,13 @@ func TestColorEnabledPathDelegatesToLipgloss(t *testing.T) {
 func TestSuccessIconFallback(t *testing.T) {
 	t.Parallel()
 	s, _, _, _ := Test()
-	if got := s.SuccessIcon(); got != "v" {
-		t.Errorf("SuccessIcon plain: want %q got %q", "v", got)
+	// G12 (F39): no-color fallback emits the Unicode glyph unstyled,
+	// not ASCII `v`/`X`. gh-compat: gh emits ✓/✗ even when piped.
+	if got := s.SuccessIcon(); got != "✓" {
+		t.Errorf("SuccessIcon plain: want %q got %q", "✓", got)
 	}
-	if got := s.FailureIcon(); got != "X" {
-		t.Errorf("FailureIcon plain: want %q got %q", "X", got)
+	if got := s.FailureIcon(); got != "✗" {
+		t.Errorf("FailureIcon plain: want %q got %q", "✗", got)
 	}
 	if got := s.WarningIcon(); got != "!" {
 		t.Errorf("WarningIcon plain: want %q got %q", "!", got)
