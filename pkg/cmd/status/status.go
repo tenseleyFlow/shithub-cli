@@ -76,11 +76,17 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 
 // Dashboard is the merged payload across all four sections, returned
 // to render / export.
+//
+// G9c (F20): JSON tags use gh-canonical camelCase to match the rest
+// of the CLI's `--json` surface (baseRefName, stargazerCount, etc.).
+// Pre-fix this command used snake_case and was the lone outlier
+// — the F-audit flagged it as a consistency bug. Scripts pinned to
+// the old `assigned_issues` keys must migrate to `assignedIssues`.
 type Dashboard struct {
 	User           string             `json:"user"`
-	AssignedIssues []search.IssueItem `json:"assigned_issues"`
-	AssignedPRs    []search.PRItem    `json:"assigned_prs"`
-	ReviewRequests []search.PRItem    `json:"review_requests"`
+	AssignedIssues []search.IssueItem `json:"assignedIssues"`
+	AssignedPRs    []search.PRItem    `json:"assignedPRs"`
+	ReviewRequests []search.PRItem    `json:"reviewRequests"`
 	Mentions       []search.IssueItem `json:"mentions"`
 }
 
