@@ -154,6 +154,17 @@ func checkoutBranch(opts *options, pr *pulls.PR, baseRepo repocmdshared.RepoRef)
 		branchName = pr.Head.Ref
 	}
 
+	// G15 (F6): if we're already on the head branch, git refuses to
+	// fetch refs/heads/X:X into the currently-checked-out branch with
+	// "refusing to fetch into branch '...' checked out at ...". The
+	// correct behavior in that case is a no-op (gh matches this) — the
+	// user is already where they want to be.
+	if current, _ := git.CurrentBranch(opts.GitRunner, ""); current != "" && current == branchName {
+		fmt.Fprintf(opts.IO.ErrOut, "%s Already on PR #%d's head branch (%s); run `git pull` to update\n", opts.IO.SuccessIcon(), pr.Number, branchName)
+		_ = baseRepo
+		return nil
+	}
+
 	remote, isFork, err := pickRemoteForFetch(opts, pr)
 	if err != nil {
 		return err
