@@ -162,3 +162,46 @@ func TestParseErrorMessageNonJSONReturnsEmpty(t *testing.T) {
 		t.Errorf("nil body should yield empty msg, got %q", got)
 	}
 }
+
+// G8c (F7/F52): the typed error .Error() outputs must NOT carry the
+// "shithub: " prefix — root.go's stderr printer already prepends it.
+// Pre-fix every printed error was `shithub: shithub: ...`. Pins all
+// four typed errors against the doubled-prefix regression.
+func TestTypedErrorsDoNotDoublePrefix(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"auth", classifyResponse(mkResp(401, "", nil), nil)},
+		{"scope", classifyResponse(mkResp(403, "", nil), []byte(`{"error":"token lacks required scope: repo:write"}`))},
+		{"not-found-empty", classifyResponse(mkResp(404, "", nil), nil)},
+		{"not-found-with-msg", classifyResponse(mkResp(404, "", nil), []byte(`{"error":"repo not found"}`))},
+		{"rate-limit", classifyResponse(mkResp(429, "", nil), nil)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if strings.HasPrefix(tc.err.Error(), "shithub:") {
+				t.Errorf("%s: %q starts with 'shithub:' — root.go will double-prefix", tc.name, tc.err.Error())
+			}
+		})
+	}
+}
+
+// G8c (F7): when the server message already contains "not found",
+// NotFoundError must not prepend a second copy. Pre-fix the printed
+// error was `shithub: shithub: not found: pull request not found`
+// — three different "not found" / "shithub" tokens stuttering.
+func TestNotFoundErrorAvoidsDoubledNoun(t *testing.T) {
+	t.Parallel()
+	err := classifyResponse(mkResp(404, "", nil), []byte(`{"error":"pull request not found"}`))
+	var nfe *NotFoundError
+	if !errors.As(err, &nfe) {
+		t.Fatalf("want NotFoundError, got %T", err)
+	}
+	// The message itself contains "not found"; the error string
+	// should be exactly the server message, no "not found: " prefix.
+	if got := nfe.Error(); got != "pull request not found" {
+		t.Errorf("doubled-noun guard: got %q want %q", got, "pull request not found")
+	}
+}
