@@ -102,6 +102,32 @@ func TestListJSONExport(t *testing.T) {
 	}
 }
 
+// TestListRoundtrip_AuthorWireShape pins the wire-shape the CLI sends
+// for `--author`. F-audit F11 / F2 status table tracks the divergence:
+// the server expects `?author=` (and 422s on unknown user), the CLI
+// today sends `?creator=` so the validation is bypassed.
+//
+// This test runs the cobra command end-to-end through cmdutil's flag
+// parser (where wire-name bugs hide) using the new RunCobra +
+// AssertQueryParam helpers from G16. When G1 lands its fix, flip the
+// expected key from `creator` to `author` and the regression is
+// locked in at the unit-test layer.
+func TestListRoundtrip_AuthorWireShape(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues", 200, []issues.Issue{})
+
+	err := tf.RunCobra(t, NewCmd(tf.Factory),
+		"--author", "ghost", "-R", "o/r")
+	if err != nil {
+		t.Fatalf("RunCobra: %v", err)
+	}
+
+	// CURRENT behaviour (F11 unfixed): CLI sends `creator=ghost`.
+	// G1 flips this to `author=ghost`; update the assertions then.
+	tf.Server.AssertQueryParam(http.MethodGet, "/api/v1/repos/o/r/issues", "creator", "ghost")
+	tf.Server.AssertQueryAbsent(http.MethodGet, "/api/v1/repos/o/r/issues", "author")
+}
+
 func TestListWebSkipsAPI(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	var opened string
