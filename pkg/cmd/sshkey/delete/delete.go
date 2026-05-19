@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -80,6 +81,13 @@ func Run(ctx context.Context, opts *options) error {
 		}
 		ok, perr := opts.Prompter.Confirm(fmt.Sprintf("Delete SSH key %q (id=%d)?", title, id), false)
 		if perr != nil {
+			// E-audit E31: EOF on closed stdin (`< /dev/null`) used to
+			// surface as bare `shithub: EOF`. Translate to the same
+			// "pass --yes" message we give to NeverPrompt callers so
+			// the user can spot the escape hatch.
+			if errors.Is(perr, io.EOF) {
+				return errors.New("ssh-key delete: no input available on stdin; pass --yes to skip confirmation")
+			}
 			return perr
 		}
 		if !ok {
