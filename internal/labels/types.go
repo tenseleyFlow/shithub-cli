@@ -31,8 +31,13 @@ type CreateInput struct {
 // EditInput is the body for PATCH /labels/{name}. NewName triggers a
 // rename when set; other fields update in place. Pointers (rather than
 // omitempty strings) let callers explicitly set "" to clear description.
+//
+// E-audit E6: NewName serializes as `name` (the server's expected
+// field). Pre-fix we wired it as `new_name`, which the server silently
+// ignored — `shithub label edit foo --name bar` printed success but
+// no rename happened.
 type EditInput struct {
-	NewName     *string `json:"new_name,omitempty"`
+	NewName     *string `json:"name,omitempty"`
 	Color       *string `json:"color,omitempty"`
 	Description *string `json:"description,omitempty"`
 }
