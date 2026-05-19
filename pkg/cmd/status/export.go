@@ -13,8 +13,13 @@ import (
 // round-trip safely.
 type exporter struct{}
 
+// G9c (F20): gh-canonical camelCase field names. Pre-fix the
+// allow-list was snake_case (`assigned_issues`, `assigned_prs`,
+// `review_requests`) and rejected `--json assignedIssues` — every
+// other exporter in the CLI uses camelCase, so the audit flagged
+// this one as the lone outlier.
 func (exporter) Fields() []string {
-	return []string{"user", "assigned_issues", "assigned_prs", "review_requests", "mentions"}
+	return []string{"user", "assignedIssues", "assignedPRs", "reviewRequests", "mentions"}
 }
 
 func (exporter) Filter(v any) (any, error) {
@@ -23,11 +28,11 @@ func (exporter) Filter(v any) (any, error) {
 		return nil, fmt.Errorf("status exporter: want Dashboard, got %T", v)
 	}
 	return map[string]any{
-		"user":            d.User,
-		"assigned_issues": issuesProj(d.AssignedIssues),
-		"assigned_prs":    prsProj(d.AssignedPRs),
-		"review_requests": prsProj(d.ReviewRequests),
-		"mentions":        issuesProj(d.Mentions),
+		"user":           d.User,
+		"assignedIssues": issuesProj(d.AssignedIssues),
+		"assignedPRs":    prsProj(d.AssignedPRs),
+		"reviewRequests": prsProj(d.ReviewRequests),
+		"mentions":       issuesProj(d.Mentions),
 	}, nil
 }
 

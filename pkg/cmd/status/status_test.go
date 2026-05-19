@@ -214,7 +214,8 @@ func TestRunJSONExport(t *testing.T) {
 		now:         fixedTime,
 	}
 	opts.Exporter.JSONSet = true
-	opts.Exporter.JSONFields = "user,assigned_issues"
+	// G9c (F20): canonical camelCase JSON field names.
+	opts.Exporter.JSONFields = "user,assignedIssues"
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -225,9 +226,38 @@ func TestRunJSONExport(t *testing.T) {
 	if got["user"] != "octocat" {
 		t.Errorf("user: %v", got["user"])
 	}
-	items, _ := got["assigned_issues"].([]any)
+	items, _ := got["assignedIssues"].([]any)
 	if len(items) != 1 {
-		t.Errorf("assigned_issues: %v", got["assigned_issues"])
+		t.Errorf("assignedIssues: %v", got["assignedIssues"])
+	}
+}
+
+// G9c (F20): pin the new field-name contract. Each section uses
+// gh-canonical camelCase (`assignedIssues`, `assignedPRs`,
+// `reviewRequests`), matching every other --json exporter. Pre-fix
+// the snake_case names rejected gh-ported scripts at the validator.
+func TestStatusJSONFieldsAreCamelCase(t *testing.T) {
+	exp := exporter{}
+	got := exp.Fields()
+	want := map[string]bool{
+		"user":           true,
+		"assignedIssues": true,
+		"assignedPRs":    true,
+		"reviewRequests": true,
+		"mentions":       true,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("Fields(): want %d, got %d: %v", len(want), len(got), got)
+	}
+	for _, f := range got {
+		if !want[f] {
+			t.Errorf("Fields() unexpected entry %q (snake_case would be %q-style)", f, "assigned_issues")
+		}
+		// Reject any snake_case (underscore-containing) entry — the
+		// gh-canonical surface has none.
+		if strings.Contains(f, "_") {
+			t.Errorf("Fields(): %q contains underscore; expected camelCase", f)
+		}
 	}
 }
 
