@@ -56,6 +56,12 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Repo, "repo", "R", "", "select another repository using the [HOST/]OWNER/REPO format")
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "the shithub host (default: configured host)")
 	cmd.Flags().BoolVar(&opts.Undo, "undo", false, "convert ready PR back to draft")
+	// G14 (F5 / F23): ready→draft is server-side unsupported in v0.1.0
+	// (POST /pulls/{n} returns 422 "ready→draft is not supported"). Hide
+	// the flag so `pr ready --help` stops advertising broken UX; the flag
+	// stays valid on the command line so scripts that pass it get the
+	// friendly client-side error below instead of a `--help` regression.
+	_ = cmd.Flags().MarkHidden("undo")
 	return cmd
 }
 
@@ -89,6 +95,14 @@ func Run(ctx context.Context, opts *options) error {
 	}
 
 	draft := opts.Undo
+	// G14 (F5 / F23): pre-flight reject ready→draft client-side. The
+	// server returns 422 "ready→draft is not supported" with a raw
+	// envelope; surfacing the message via the api error path produced
+	// `shithub: shithub API: 422 ready→draft is not supported`. Until
+	// the server adds support, give the user a single clean line.
+	if opts.Undo {
+		return fmt.Errorf("pr ready --undo: ready→draft is not yet supported by the server")
+	}
 	if _, err := pc.Edit(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number, pulls.EditInput{Draft: &draft}); err != nil {
 		return err
 	}
