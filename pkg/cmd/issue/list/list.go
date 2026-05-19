@@ -85,6 +85,11 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Mention, "mention", "", "filter by mention (@me supported)")
 	cmd.Flags().StringVarP(&opts.Milestone, "milestone", "m", "", "filter by milestone number or title")
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "search query (passes through to /search/issues; placeholder)")
+	// G12 (F41): the --search flag is declared but not wired into the
+	// list path. Hide from --help until C13 reaches the list endpoint;
+	// the flag remains valid on the command line (back-compat with
+	// scripts that pass it) but no longer self-advertises.
+	_ = cmd.Flags().MarkHidden("search")
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of issues to fetch")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the issues list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)

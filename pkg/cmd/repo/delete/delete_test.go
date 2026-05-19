@@ -80,3 +80,28 @@ func TestDeleteConfirmationMatches(t *testing.T) {
 	}
 	tf.Server.AssertCalled(http.MethodDelete, "/api/v1/repos/o/r")
 }
+
+// TestDeleteInfersCurrentUserOwner pins F38: an unqualified repo name
+// resolves to the authenticated user's namespace, matching the rule
+// `repo create <name>` already follows. Pre-fix this errored with
+// "expected owner/name" while `create` worked.
+func TestDeleteInfersCurrentUserOwner(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/user", 200, map[string]any{"login": "alice"})
+	tf.Server.Handle(http.MethodDelete, "/api/v1/repos/alice/cli-audit-rt", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		RepoArg:     "cli-audit-rt",
+		Yes:         true,
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	tf.Server.AssertCalled(http.MethodDelete, "/api/v1/repos/alice/cli-audit-rt")
+}

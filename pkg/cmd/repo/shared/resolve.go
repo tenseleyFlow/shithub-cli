@@ -74,10 +74,29 @@ func ParseRepoArg(s string) (RepoRef, error) {
 		if parts[0] == "" || parts[1] == "" || parts[2] == "" {
 			return RepoRef{}, fmt.Errorf("repo: expected host/owner/name, got %q", s)
 		}
+		// G12 (F17 / F25): a 3-part input must look like host/owner/name —
+		// the first segment needs to plausibly be a hostname so we don't
+		// accept "owner/repo/extra" as host="owner" and then surface the
+		// downstream "no token configured for host: owner" red herring.
+		// Conservative heuristic: a real host has a "." (or is the bare
+		// "localhost"); bare alphanumeric strings can't be hostnames.
+		if !looksLikeHost(parts[0]) {
+			return RepoRef{}, fmt.Errorf("repo: expected owner/name (got %q)", s)
+		}
 		return RepoRef{Host: parts[0], Owner: parts[1], Name: parts[2]}, nil
 	default:
 		return RepoRef{}, fmt.Errorf("repo: expected owner/name (got %q)", s)
 	}
+}
+
+// looksLikeHost reports whether s plausibly names a hostname. Used by
+// the 3-part repo-arg parser to reject "owner/repo/extra" before it
+// downgrades to a doomed auth lookup against a bogus host.
+func looksLikeHost(s string) bool {
+	if s == "localhost" {
+		return true
+	}
+	return strings.Contains(s, ".")
 }
 
 // isLikelyURL reports whether s looks like a remote URL rather than a

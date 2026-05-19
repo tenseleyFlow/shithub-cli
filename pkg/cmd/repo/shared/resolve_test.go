@@ -39,6 +39,13 @@ func TestParseRepoArg(t *testing.T) {
 		{"git@shithub.sh:octo/hello", true, "octo", "hello", "shithub.sh"},
 		// Defense: malformed URL surfaces a clear error.
 		{"https://shithub.sh/onlyowner", false, "", "", ""},
+		// G12 (F17 / F25): 3-part inputs whose first segment isn't a
+		// plausible hostname must be rejected up front, not downgraded
+		// to an auth lookup that surfaces "no token configured for
+		// host: owner".
+		{"owner/repo/extra", false, "", "", ""},
+		// Boundary: a real host with a dot still parses as 3-part.
+		{"localhost/octo/hello", true, "octo", "hello", "localhost"},
 	}
 	for _, tc := range cases {
 		got, err := ParseRepoArg(tc.in)

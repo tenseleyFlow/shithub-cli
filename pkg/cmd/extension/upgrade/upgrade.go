@@ -95,6 +95,18 @@ func Run(_ context.Context, opts *options) error {
 }
 
 func upgradeOne(opts *options, target, name string) error {
+	// G12 (F40): distinguish "extension not installed at all" from
+	// "installed but not a git checkout." The former is a hard error
+	// (the targeted thing doesn't exist); the latter is a friendly
+	// skip (the user can't upgrade what they vendored manually).
+	// Pre-fix both paths emitted the same "skipped: not a git checkout"
+	// notice and exited 0, hiding typos / missing extensions.
+	if _, err := os.Stat(target); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("extension %q is not installed", name)
+		}
+		return err
+	}
 	if _, err := os.Stat(filepath.Join(target, ".git")); err != nil {
 		fmt.Fprintf(opts.IO.ErrOut, "%s skipped: %q is not a git checkout (install with `extension install` to enable upgrades)\n",
 			opts.IO.SuccessIcon(), name)
