@@ -183,13 +183,20 @@ func renderComments(io *iostreams.IOStreams, list []issues.Comment) {
 
 // writeMarkdown renders content with glamour; on render error falls back
 // to plain bytes so a malformed body still shows.
+//
+// E-audit E24: always end with a newline so the body doesn't visually
+// merge with the next shell prompt. glamour's output ends in `\n` for
+// typical inputs but not always (e.g. inline-only fragments); the
+// trailing Fprintln is a belt-and-suspenders fix.
 func writeMarkdown(io *iostreams.IOStreams, content string) {
 	rendered, err := io.RenderMarkdown(content)
 	if err != nil {
-		fmt.Fprintln(io.Out, content)
-		return
+		rendered = content
 	}
 	fmt.Fprint(io.Out, rendered)
+	if !strings.HasSuffix(rendered, "\n") {
+		fmt.Fprintln(io.Out)
+	}
 }
 
 // authorLogin returns the issue creator's login or "ghost" when the

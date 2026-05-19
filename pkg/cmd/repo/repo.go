@@ -44,6 +44,10 @@ Common subcommands:
   set-default set the default repository for the working directory
   sync      sync a fork with its upstream
 `,
+		// E-audit E16: unknown subcommands must exit non-zero. See
+		// cmdutil.ParentRunE — no-arg invocations still print help.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(viewCmd.NewCmd(f))
 	cmd.AddCommand(listCmd.NewCmd(f))

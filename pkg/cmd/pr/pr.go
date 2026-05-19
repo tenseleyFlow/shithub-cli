@@ -51,6 +51,9 @@ Common subcommands:
   merge         merge a pull request (merge/squash/rebase, auto, admin)
   checks        show check runs for the PR head SHA
 `,
+		// E-audit E16: unknown subcommand → exit non-zero.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(createCmd.NewCmd(f))
 	cmd.AddCommand(listCmd.NewCmd(f))

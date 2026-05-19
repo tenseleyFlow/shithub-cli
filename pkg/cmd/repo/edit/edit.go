@@ -271,8 +271,14 @@ func dedupe(in []string) []string {
 // EditInput as a non-nil pointer. cobra's BoolVar can't do that natively
 // because the zero value is indistinguishable from "not set", so we use
 // a small custom Value.
+//
+// E-audit E14: NoOptDefVal makes the bare flag form (`--enable-issues`)
+// equivalent to `--enable-issues=true`, matching gh's behavior. Without
+// this users had to spell `--enable-issues=true` explicitly and the
+// help text gave no hint.
 func addBoolPtrFlag(cmd *cobra.Command, dest **bool, name, usage string) {
 	cmd.Flags().Var(&boolPtrValue{dest: dest}, name, usage)
+	cmd.Flags().Lookup(name).NoOptDefVal = "true"
 }
 
 // boolPtrValue is a pflag.Value that records whether it was set, so the

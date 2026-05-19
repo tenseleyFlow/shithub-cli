@@ -223,13 +223,18 @@ func renderComments(io *iostreams.IOStreams, list []issues.Comment) {
 	}
 }
 
+// writeMarkdown renders content with glamour; on render error falls
+// back to plain bytes. E-audit E24: always end with a newline so the
+// body doesn't visually merge with the next shell prompt.
 func writeMarkdown(io *iostreams.IOStreams, content string) {
 	rendered, err := io.RenderMarkdown(content)
 	if err != nil {
-		fmt.Fprintln(io.Out, content)
-		return
+		rendered = content
 	}
 	fmt.Fprint(io.Out, rendered)
+	if !strings.HasSuffix(rendered, "\n") {
+		fmt.Fprintln(io.Out)
+	}
 }
 
 func authorLogin(p *pulls.PR) string {

@@ -138,8 +138,11 @@ func render(io *iostreams.IOStreams, resp *search.Response[search.CodeItem]) {
 	}
 	tp := tableprinter.New(io.Out, io.IsStdoutTTY(), io.TerminalWidth())
 	for _, it := range resp.Items {
-		repo := ""
-		if it.Repository != nil {
+		// E-audit E11: prefer the flat `repo` field (what shithub
+		// emits today) so the column populates; keep the nested
+		// envelope as a forward-compat fallback.
+		repo := it.Repo
+		if repo == "" && it.Repository != nil {
 			repo = it.Repository.FullName
 		}
 		tp.AddRow(repo, it.Path, snippet(it))
