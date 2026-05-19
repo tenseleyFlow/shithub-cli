@@ -56,7 +56,10 @@ type AuthError struct {
 }
 
 func (e *AuthError) Error() string {
-	return fmt.Sprintf("shithub: not authenticated (%d). Run `shithub auth login`.", e.StatusCode)
+	// G8c (F52/F7): root.go prepends "shithub: " on stderr — typed
+	// errors must emit plain messages so the user sees one prefix,
+	// not the doubled `shithub: shithub: ...` form the F-audit caught.
+	return fmt.Sprintf("not authenticated (%d). Run `shithub auth login`.", e.StatusCode)
 }
 
 // Unwrap exposes the underlying APIError so errors.As(err, &api.APIError{}) works.
@@ -74,9 +77,9 @@ type ScopeError struct {
 
 func (e *ScopeError) Error() string {
 	if e.RequiredScope != "" {
-		return fmt.Sprintf("shithub: token lacks scope %q. Run `shithub auth refresh -s %s`.", e.RequiredScope, e.RequiredScope)
+		return fmt.Sprintf("token lacks scope %q. Run `shithub auth refresh -s %s`.", e.RequiredScope, e.RequiredScope)
 	}
-	return fmt.Sprintf("shithub: permission denied (%d): %s", e.StatusCode, e.Message)
+	return fmt.Sprintf("permission denied (%d): %s", e.StatusCode, e.Message)
 }
 
 // Unwrap exposes the underlying APIError.
@@ -91,10 +94,18 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
+	// G8c (F7/F52): server messages often already contain "not found"
+	// (e.g. "pull request not found"). Don't prepend a second copy —
+	// the audit caught `shithub: shithub: not found: pull request not
+	// found`, a triple-stutter. With root.go's single "shithub: "
+	// prefix gone (G8c), just don't double the noun here either.
 	if e.Message != "" {
-		return fmt.Sprintf("shithub: not found: %s", e.Message)
+		if strings.Contains(strings.ToLower(e.Message), "not found") {
+			return e.Message
+		}
+		return "not found: " + e.Message
 	}
-	return "shithub: not found"
+	return "not found"
 }
 
 // Unwrap exposes the underlying APIError.
@@ -111,9 +122,9 @@ type RateLimitError struct {
 
 func (e *RateLimitError) Error() string {
 	if !e.ResetAt.IsZero() {
-		return fmt.Sprintf("shithub: rate limited; resets at %s", e.ResetAt.Format(time.RFC3339))
+		return fmt.Sprintf("rate limited; resets at %s", e.ResetAt.Format(time.RFC3339))
 	}
-	return "shithub: rate limited"
+	return "rate limited"
 }
 
 // Unwrap exposes the underlying APIError.
