@@ -76,7 +76,9 @@ func TestEditRename(t *testing.T) {
 	if _, err := c.Edit(context.Background(), "o", "r", "old", EditInput{NewName: &newName}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
-	if !strings.Contains(string(body), `"new_name":"new"`) {
+	// E6: server expects `name`, not `new_name`. Pre-fix the CLI sent
+	// the wrong field and the server silently no-op'd.
+	if !strings.Contains(string(body), `"name":"new"`) {
 		t.Errorf("rename: %s", body)
 	}
 }
