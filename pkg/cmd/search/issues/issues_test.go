@@ -52,3 +52,38 @@ func TestIssuesSendsTypeIssueAndQualifiers(t *testing.T) {
 		}
 	}
 }
+
+// TestIssuesRendersRepoColumn pins F50: each row's repo column must be
+// populated from the `repository.full_name` envelope. Pre-G9a the
+// server returned a flat `repo` field only and the row layout had an
+// empty leading column.
+func TestIssuesRendersRepoColumn(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(search.Response[issues.Issue]{
+			TotalCount: 1,
+			Items: []issues.Issue{{
+				Number: 1, State: "open", Title: "renamed issue",
+				Repository: &issues.RepoRef{FullName: "mfwolffe/demo"},
+			}},
+		})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(_ string) error { return nil },
+		Query:       "renamed",
+		Common:      searchshared.CommonFlags{Limit: 30},
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, want := range []string{"mfwolffe/demo", "#1", "open", "renamed issue"} {
+		if !strings.Contains(tf.Out.String(), want) {
+			t.Errorf("row missing %q; got %q", want, tf.Out.String())
+		}
+	}
+}
