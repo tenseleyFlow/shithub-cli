@@ -23,7 +23,7 @@ func TestCommentCreate(t *testing.T) {
 		body = b
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(issues.Comment{ID: 99, HTMLURL: "https://shithub.sh/o/r/pull/1#issuecomment-99"})
+		_ = json.NewEncoder(w).Encode(issues.Comment{ID: 99, HTMLURL: "https://shithub.sh/o/r/pulls/1#issuecomment-99"})
 	})
 
 	opts := &options{
@@ -172,7 +172,7 @@ func TestCommentWebOpensURL(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.HasSuffix(opened, "/o/r/pull/1") {
+	if !strings.HasSuffix(opened, "/o/r/pulls/1") {
 		t.Errorf("URL: %q", opened)
 	}
 }
