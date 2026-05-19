@@ -51,3 +51,41 @@ func TestCodeQualifiersAndSnippet(t *testing.T) {
 		t.Errorf("missing snippet: %q", tf.Out.String())
 	}
 }
+
+// TestCodeRendersPreviewLineAndRepo pins F22: each row must include
+// the repo column (flat `repo` field) and the snippet column (flat
+// `preview_line` field — what shithub's server emits via ts_headline).
+// Pre-fix the renderer read `text_matches` only and produced rows like
+// "\tmain.go\t" with both columns empty.
+func TestCodeRendersPreviewLineAndRepo(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/code", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(search.Response[search.CodeItem]{
+			TotalCount: 1,
+			Items: []search.CodeItem{{
+				Path:        "cmd/main.go",
+				Repo:        "octo/hello",
+				PreviewLine: "func main() { ... }",
+			}},
+		})
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(_ string) error { return nil },
+		Query:       "main",
+		Common:      searchshared.CommonFlags{Limit: 30},
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	for _, want := range []string{"octo/hello", "cmd/main.go", "func main()"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("row missing %q; got %q", want, out)
+		}
+	}
+}
