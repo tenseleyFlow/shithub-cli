@@ -27,6 +27,20 @@ func NewClient(a *api.Client) *Client {
 	return &Client{api: a}
 }
 
+// ListMilestones fetches the milestone catalog for a repo. Used by
+// `issue create --milestone <title>` (E-audit E19) to resolve a
+// human-readable name into the numeric id the server's create endpoint
+// expects. Server pagination doesn't apply here — milestones per repo
+// are bounded small enough that a single page suffices for resolution.
+func (c *Client) ListMilestones(ctx context.Context, owner, repo string) ([]Milestone, error) {
+	var out []Milestone
+	if err := c.api.REST(ctx, http.MethodGet, "/repos/{owner}/{repo}/milestones?state=all", nil, &out,
+		api.WithOwner(owner), api.WithRepo(repo)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Create posts a new issue under owner/repo. Returns the server's echoed
 // envelope (with number/url filled in).
 func (c *Client) Create(ctx context.Context, owner, repo string, in CreateInput) (*Issue, error) {

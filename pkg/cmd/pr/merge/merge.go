@@ -62,11 +62,15 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		DefaultHost: f.DefaultHost,
 	}
 	cmd := &cobra.Command{
-		Use:   "merge <number-or-url-or-branch>",
+		Use:   "merge [<number-or-url-or-branch>]",
 		Short: "Merge a pull request",
-		Args:  cobra.ExactArgs(1),
+		// E-audit E22: accept zero args so the no-arg invocation can
+		// resolve against the current branch's open PR (gh-compat).
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
-			opts.Arg = args[0]
+			if len(args) > 0 {
+				opts.Arg = args[0]
+			}
 			if opts.GitRunner == nil {
 				if r, err := git.FromPath(); err == nil {
 					opts.GitRunner = r
@@ -130,9 +134,26 @@ func Run(ctx context.Context, opts *options) error {
 	}
 	pc := pulls.NewClient(client)
 
-	ref, err := prshared.ParsePRArg(ctx, pc, opts.Arg, fb)
-	if err != nil {
-		return err
+	var ref prshared.PRRef
+	if opts.Arg != "" {
+		ref, err = prshared.ParsePRArg(ctx, pc, opts.Arg, fb)
+		if err != nil {
+			return err
+		}
+	} else {
+		// E-audit E22: no arg → resolve the open PR for the current
+		// branch. Matches gh's `gh pr merge` shape; without it users
+		// inside a checked-out PR branch had to look up the number
+		// before they could merge.
+		branch := prshared.CurrentBranchFromGit(opts.GitRunner, "")
+		if branch == "" {
+			return errors.New("pr merge: pass a number/URL/branch (couldn't detect current branch)")
+		}
+		pr, perr := prshared.FindPRByBranch(ctx, pc, fb, branch)
+		if perr != nil {
+			return perr
+		}
+		ref = prshared.PRRef{Repo: fb, Number: pr.Number}
 	}
 	if ref.Repo.Host == "" {
 		ref.Repo.Host = fb.Host
