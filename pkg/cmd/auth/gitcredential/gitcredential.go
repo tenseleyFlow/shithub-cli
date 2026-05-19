@@ -36,10 +36,14 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		Keyring: f.Keyring,
 	}
 	cmd := &cobra.Command{
-		Use:    "git-credential",
-		Short:  "Internal: git credential helper protocol target",
-		Hidden: true,
-		Args:   cobra.MinimumNArgs(1),
+		Use: "git-credential",
+		// G14 (F24): pre-fix Hidden:true left this subcommand invisible
+		// in `auth --help`, but the `auth token --help` text explicitly
+		// references it for manual git-credential helper configuration.
+		// Unhide so the discoverability matches the doc; the "Internal:"
+		// prefix in Short signals the role.
+		Short: "Internal: git credential helper protocol target",
+		Args:  cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			return Run(c.Context(), opts, args[0])
 		},
