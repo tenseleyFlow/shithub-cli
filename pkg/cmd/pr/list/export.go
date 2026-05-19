@@ -37,6 +37,8 @@ var exportableFields = []string{
 	"isCrossRepository",
 	"isDraft",
 	"labels",
+	"mergeStateStatus",
+	"mergeable",
 	"merged",
 	"mergedAt",
 	"number",
@@ -93,6 +95,8 @@ func ProjectPR(p pulls.PR) map[string]any {
 		"isCrossRepository": isCrossRepository(p),
 		"isDraft":           p.Draft,
 		"labels":            labels,
+		"mergeStateStatus":  p.MergeableState,
+		"mergeable":         mergeableFlag(p.Mergeable),
 		"merged":            p.Merged,
 		"mergedAt":          p.MergedAt,
 		"number":            p.Number,
@@ -123,6 +127,17 @@ func repoLiteAsExport(r *pulls.RepoLite) any {
 		"private":   r.Private,
 		"url":       r.HTMLURL,
 	}
+}
+
+// mergeableFlag dereferences the optional Mergeable pointer. nil maps
+// to nil (unknown), preserving the three-state semantics gh emits as
+// "UNKNOWN"/"CONFLICTING"/"MERGEABLE" — we just emit the raw bool
+// since the server hasn't normalized to the enum form yet.
+func mergeableFlag(b *bool) any {
+	if b == nil {
+		return nil
+	}
+	return *b
 }
 
 // isCrossRepository reports whether head and base live on different

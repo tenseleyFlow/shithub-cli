@@ -68,6 +68,45 @@ func TestProjectPR_PopulatedRepos(t *testing.T) {
 	}
 }
 
+// TestProjectPR_F4Fields pins F4: the gh-canonical `mergeable` +
+// `mergeStateStatus` fields. The audit found `--json mergeable,
+// mergeStateStatus` rejected even though the server-side A17/A20
+// work already computes mergeable_state. Mergeable=*bool round-trips
+// as a bare bool; MergeableState=string projects unchanged.
+func TestProjectPR_F4Fields(t *testing.T) {
+	for _, want := range []string{"mergeable", "mergeStateStatus"} {
+		found := false
+		for _, f := range ExportableFields() {
+			if f == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("ExportableFields missing %q (F4)", want)
+		}
+	}
+
+	mergeableTrue := true
+	got := ProjectPR(pulls.PR{
+		Number:         1,
+		Mergeable:      &mergeableTrue,
+		MergeableState: "clean",
+	})
+	if got["mergeable"] != true {
+		t.Errorf("mergeable: got %v want true", got["mergeable"])
+	}
+	if got["mergeStateStatus"] != "clean" {
+		t.Errorf("mergeStateStatus: got %v want clean", got["mergeStateStatus"])
+	}
+
+	// Nil pointer → nil (unknown).
+	gotNil := ProjectPR(pulls.PR{Number: 2})
+	if gotNil["mergeable"] != nil {
+		t.Errorf("nil Mergeable should project nil, got %v", gotNil["mergeable"])
+	}
+}
+
 // TestProjectPR_NilReposDegradeGracefully covers the older-server
 // case where the response lacks the `repo` envelope entirely. The
 // exporter must emit nil for the per-side repo fields and false for
