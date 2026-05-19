@@ -137,7 +137,32 @@ func Run(ctx context.Context, opts *options) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(opts.IO.ErrOut, "%s Created fork %s\n", opts.IO.SuccessIcon(), fork.FullName)
+	// E-audit E17: the server's POST /forks response sometimes omits
+	// full_name (or returns a partial envelope). Compute a best-effort
+	// fallback from the inputs so the success line never reads
+	// "Created fork " with a trailing space.
+	forkName := strings.TrimSpace(fork.FullName)
+	if forkName == "" {
+		forkOwner := opts.Org
+		if forkOwner == "" {
+			if me, merr := client.CurrentUser(ctx); merr == nil {
+				forkOwner = me.Login
+			}
+		}
+		forkRepoName := opts.Name
+		if forkRepoName == "" {
+			forkRepoName = ref.Name
+		}
+		if forkOwner != "" && forkRepoName != "" {
+			forkName = forkOwner + "/" + forkRepoName
+		}
+	}
+	upstream := ref.Owner + "/" + ref.Name
+	if forkName != "" {
+		fmt.Fprintf(opts.IO.ErrOut, "%s Created fork %s from %s\n", opts.IO.SuccessIcon(), forkName, upstream)
+	} else {
+		fmt.Fprintf(opts.IO.ErrOut, "%s Created fork from %s\n", opts.IO.SuccessIcon(), upstream)
+	}
 
 	// shithub's Fork endpoint returns immediately, but the server may
 	// still be provisioning the new repo's git storage. Poll View()
