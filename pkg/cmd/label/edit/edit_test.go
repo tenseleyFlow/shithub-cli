@@ -38,7 +38,8 @@ func TestEditRenameAndColor(t *testing.T) {
 	if err := Run(context.Background(), opts); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(string(body), `"new_name":"new"`) {
+	// E6: server expects `name` for renames, not `new_name`.
+	if !strings.Contains(string(body), `"name":"new"`) {
 		t.Errorf("rename: %s", body)
 	}
 	if !strings.Contains(string(body), `"color":"ff0000"`) {
