@@ -121,3 +121,38 @@ func TestViewWebSkipsAPI(t *testing.T) {
 		t.Errorf("URL: %q want suffix /o/r/pulls/1", opened)
 	}
 }
+
+// TestViewJSONF4Fields pins F4 over a real cobra→fakeapi roundtrip:
+// `pr view --json mergeable,mergeStateStatus` must validate and emit
+// both fields. Pre-G10 the allow-list rejected them with "unknown field".
+func TestViewJSONF4Fields(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	mergeableTrue := true
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/1", 200, pulls.PR{
+		Number: 1, Title: "hi", State: "open",
+		User: &api.User{Login: "octo"},
+		Head: pulls.Ref{Ref: "feature"}, Base: pulls.Ref{Ref: "trunk"},
+		Mergeable:      &mergeableTrue,
+		MergeableState: "clean",
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(string) error { return nil },
+		Arg:         "1",
+		Repo:        "o/r",
+	}
+	opts.Exporter.JSONFields = "mergeable,mergeStateStatus"
+	opts.Exporter.JSONSet = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	for _, want := range []string{`"mergeable":true`, `"mergeStateStatus":"clean"`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("--json projection missing %q; got %s", want, out)
+		}
+	}
+}
