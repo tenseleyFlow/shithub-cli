@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 
@@ -182,5 +183,66 @@ func (s *Server) AssertCallCount(want int) {
 	s.t.Helper()
 	if got := len(s.Calls()); got != want {
 		s.t.Errorf("fakeapi: call count: want %d got %d (%v)", want, got, s.Calls())
+	}
+}
+
+// LastCall returns the last recorded call matching method+path, or nil
+// if none match. Roundtrip tests use this to inspect the exact query
+// string / body the CLI sent — without that visibility, wire-name
+// mismatches like F11/F12 hide behind passing unit tests.
+func (s *Server) LastCall(method, path string) *Call {
+	calls := s.Calls()
+	for i := len(calls) - 1; i >= 0; i-- {
+		if calls[i].Method == method && calls[i].Path == path {
+			c := calls[i]
+			return &c
+		}
+	}
+	return nil
+}
+
+// AssertQueryParam fails the test when the last recorded call to
+// method+path didn't carry key=value in its query string. Use this in
+// roundtrip tests to pin the CLI↔server wire contract: e.g. assert
+// that `shithub issue list --author ghost` sends `?author=ghost` (not
+// `?creator=ghost`, F-audit F11).
+func (s *Server) AssertQueryParam(method, path, key, value string) {
+	s.t.Helper()
+	call := s.LastCall(method, path)
+	if call == nil {
+		s.t.Errorf("fakeapi: expected %s %s; no such call (calls=%v)", method, path, s.Calls())
+		return
+	}
+	values, err := url.ParseQuery(call.Query)
+	if err != nil {
+		s.t.Errorf("fakeapi: parse query %q: %v", call.Query, err)
+		return
+	}
+	got := values.Get(key)
+	if got != value {
+		s.t.Errorf("fakeapi: %s %s query[%q] = %q, want %q (raw=%q)",
+			method, path, key, got, value, call.Query)
+	}
+}
+
+// AssertQueryAbsent fails the test when key is present in the query
+// string of the last recorded call to method+path. Use this to lock
+// in "we should NOT have sent this param" — e.g. when a flag default
+// shouldn't propagate to the wire.
+func (s *Server) AssertQueryAbsent(method, path, key string) {
+	s.t.Helper()
+	call := s.LastCall(method, path)
+	if call == nil {
+		s.t.Errorf("fakeapi: expected %s %s; no such call", method, path)
+		return
+	}
+	values, err := url.ParseQuery(call.Query)
+	if err != nil {
+		s.t.Errorf("fakeapi: parse query %q: %v", call.Query, err)
+		return
+	}
+	if values.Has(key) {
+		s.t.Errorf("fakeapi: %s %s query[%q] should be absent, got %q",
+			method, path, key, values.Get(key))
 	}
 }
