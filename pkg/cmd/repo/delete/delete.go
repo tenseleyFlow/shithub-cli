@@ -64,8 +64,32 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 
 // Run executes the delete operation.
 func Run(ctx context.Context, opts *options) error {
+	// G12 (F38): `repo create cli-audit-rt` accepts an unqualified name
+	// and infers owner=current-user; `repo delete cli-audit-rt` used to
+	// error "expected owner/name". Symmetrize the rule for the identity-
+	// space delete verb.
+	repoArg := opts.RepoArg
+	if repoArg != "" && !strings.ContainsRune(repoArg, '/') {
+		host := opts.Hostname
+		if host == "" {
+			host = hostOrDefault(opts.DefaultHost)
+		}
+		client, err := opts.HTTPClient(host)
+		if err != nil {
+			return err
+		}
+		u, err := client.CurrentUser(ctx)
+		if err != nil {
+			return fmt.Errorf("repo delete: resolve current user to qualify %q: %w", repoArg, err)
+		}
+		if u == nil || u.Login == "" {
+			return fmt.Errorf("repo delete: current user has no login")
+		}
+		repoArg = u.Login + "/" + repoArg
+	}
+
 	resolver := shared.Resolver{
-		RepoFlag:    opts.RepoArg,
+		RepoFlag:    repoArg,
 		Hostname:    opts.Hostname,
 		DefaultHost: hostOrDefault(opts.DefaultHost),
 		GitRunner:   opts.GitRunner,
