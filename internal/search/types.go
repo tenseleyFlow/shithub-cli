@@ -30,12 +30,18 @@ type Response[T any] struct {
 // matched-line preview in TextMatches when available (S28's FTS already
 // produces snippets — server just needs to forward them).
 type CodeMatch struct {
-	Name        string      `json:"name"`
-	Path        string      `json:"path"`
-	SHA         string      `json:"sha,omitempty"`
-	URL         string      `json:"url,omitempty"`
-	HTMLURL     string      `json:"html_url,omitempty"`
-	Repository  *repos.Repo `json:"repository,omitempty"`
+	Name       string      `json:"name"`
+	Path       string      `json:"path"`
+	SHA        string      `json:"sha,omitempty"`
+	URL        string      `json:"url,omitempty"`
+	HTMLURL    string      `json:"html_url,omitempty"`
+	Repository *repos.Repo `json:"repository,omitempty"`
+	// Repo is the flat `owner/name` string shithub returns today.
+	// `Repository` exists for forward-compat with a richer envelope,
+	// but the renderer should prefer `Repo` (E-audit E11: the table
+	// column was rendering empty because the server doesn't ship the
+	// nested `repository` object yet).
+	Repo        string      `json:"repo,omitempty"`
 	Score       float64     `json:"score,omitempty"`
 	TextMatches []TextMatch `json:"text_matches,omitempty"`
 }
