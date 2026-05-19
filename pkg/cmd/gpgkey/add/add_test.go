@@ -73,3 +73,29 @@ func TestGPGAddRefusesNonArmored(t *testing.T) {
 		t.Fatal("expected error: SSH key shouldn't pass as GPG armored block")
 	}
 }
+
+// TestGPGAddTitleAliasMapsToName pins F31: cobra accepts both `--name`
+// and `--title` and writes to the same opts.Name target so gh-style
+// `--title` works across both key-management commands.
+func TestGPGAddTitleAliasMapsToName(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	const blob = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nmQENBF…\n-----END PGP PUBLIC KEY BLOCK-----\n"
+	tf.In.WriteString(blob)
+
+	var body json.RawMessage
+	tf.Server.Handle(http.MethodPost, "/api/v1/user/gpg_keys", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		body = b
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(keys.GPGKey{ID: 7})
+	})
+
+	cmd := NewCmd(tf.Factory)
+	cmd.SetArgs([]string{"--title", "release-key"})
+	if err := cmd.ExecuteContext(context.Background()); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(string(body), `"name":"release-key"`) {
+		t.Errorf("body should send name=release-key via --title alias: %s", body)
+	}
+}

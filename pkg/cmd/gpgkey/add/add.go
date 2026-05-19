@@ -60,6 +60,13 @@ The CLI refuses to upload a private key — only the public block
 	}
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "the shithub host (default: configured host)")
 	cmd.Flags().StringVarP(&opts.Name, "name", "n", "", "human-readable name for this key (default: server-derived from key uid)")
+	// G14 (F31): `ssh-key add` calls the same concept --title, and gh
+	// uses --title for both key types. Accept --title here too so users
+	// don't have to remember which spelling each subcommand wants. Hide
+	// it from --help to keep one canonical form visible; both write to
+	// the same opts.Name target so whichever the user passes wins.
+	cmd.Flags().StringVar(&opts.Name, "title", "", "alias for --name (gh-compat)")
+	_ = cmd.Flags().MarkHidden("title")
 	return cmd
 }
 
