@@ -14,6 +14,7 @@ import (
 	cloneCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/clone"
 	createCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/create"
 	deleteCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/delete"
+	deploykeyCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/deploykey"
 	editCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/edit"
 	forkCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/fork"
 	listCmd "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/list"
@@ -43,6 +44,7 @@ Common subcommands:
   delete    delete a repository
   set-default set the default repository for the working directory
   sync      sync a fork with its upstream
+  deploy-key manage deploy keys (deferred — server-side support pending)
 `,
 		// E-audit E16: unknown subcommands must exit non-zero. See
 		// cmdutil.ParentRunE — no-arg invocations still print help.
@@ -61,5 +63,6 @@ Common subcommands:
 	cmd.AddCommand(deleteCmd.NewCmd(f))
 	cmd.AddCommand(setdefaultCmd.NewCmd(f))
 	cmd.AddCommand(syncCmd.NewCmd(f))
+	cmd.AddCommand(deploykeyCmd.NewCmd(f))
 	return cmd
 }

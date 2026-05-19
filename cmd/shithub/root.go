@@ -88,6 +88,12 @@ func Execute() {
 	}
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "shithub:", err)
+		// E-audit E20: deferred-feature stubs return a typed error so
+		// scripts can tell "feature not shipped" from a real failure.
+		// gh uses exit 2 for the same; mirror it.
+		if cmdutil.IsNotYetSupported(err) {
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }
