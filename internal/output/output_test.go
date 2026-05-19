@@ -369,3 +369,34 @@ func newTestCmdWithWebAndOutput() *cobra.Command {
 	MarkWebMutuallyExclusive(cmd)
 	return cmd
 }
+
+// TestApplyTemplateAppendsTrailingNewline pins F37: every command's
+// `-t '{{...}}'` template output must end in `\n` (matching `shithub
+// api -t`'s A6 behavior). Pre-fix `repo view -t '{{.fullName}}'`
+// emitted the value without a newline, merging into the next shell
+// prompt or pipeline reader's line boundary.
+func TestApplyTemplateAppendsTrailingNewline(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		tmpl string
+		in   string
+		want string
+	}{
+		{"no trailing newline", `{{.fullName}}`, `{"fullName":"octo/hello"}`, "octo/hello\n"},
+		{"already ends in newline", "{{.fullName}}\n", `{"fullName":"octo/hello"}`, "octo/hello\n"},
+		{"empty template", ``, `{"x":1}`, "\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := applyTemplate(&buf, tc.tmpl, []byte(tc.in)); err != nil {
+				t.Fatalf("applyTemplate: %v", err)
+			}
+			if got := buf.String(); got != tc.want {
+				t.Errorf("got %q want %q", got, tc.want)
+			}
+		})
+	}
+}

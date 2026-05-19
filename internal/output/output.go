@@ -301,8 +301,22 @@ func applyTemplate(out io.Writer, tmpl string, encoded []byte) error {
 		return fmt.Errorf("output: re-decode for template: %w", err)
 	}
 
-	if err := t.Execute(out, input); err != nil {
+	// G12 (F37): mirror `shithub api -t` (A6) — buffer the rendered
+	// template, write it, and ensure a trailing newline so the output
+	// doesn't merge into the next shell prompt or pipeline reader's
+	// line boundary. `--jq` already terminates with `\n`; without this
+	// `repo view -t '{{.fullName}}'` was the lone outlier.
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, input); err != nil {
 		return fmt.Errorf("output: execute template: %w", err)
+	}
+	rendered := buf.Bytes()
+	if _, err := out.Write(rendered); err != nil {
+		return err
+	}
+	if len(rendered) == 0 || rendered[len(rendered)-1] != '\n' {
+		_, err := io.WriteString(out, "\n")
+		return err
 	}
 	return nil
 }
