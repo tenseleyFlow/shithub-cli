@@ -86,6 +86,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Head, "head", "H", "", "filter by head branch (or user:branch)")
 	cmd.Flags().StringVar(&opts.Draft, "draft", "", "filter by draft status: {true|false}")
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "search query (placeholder; lands with C13 search)")
+	// G12 (F41): same as issue list — the flag exists but isn't wired
+	// in the list path. Hide from --help until C13 reaches list.
+	_ = cmd.Flags().MarkHidden("search")
 	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of PRs to fetch")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the PR list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
