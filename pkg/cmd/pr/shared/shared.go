@@ -147,8 +147,13 @@ func CurrentBranchFromGit(r git.Runner, dir string) string {
 }
 
 // PRWebURL composes the browser-visible PR URL.
+//
+// G4 (F32): shithub's web app serves PRs at `/pulls/{N}` (plural) —
+// the singular `/pull/{N}` is a 404. The server-side REST `html_url`
+// also emits `/pulls/{N}`; this builder must agree. Pre-fix every
+// `pr view --web` landed users on a 404 page.
 func PRWebURL(ref PRRef) string {
-	return fmt.Sprintf("%s/pull/%d", repocmdshared.WebURL(ref.Repo), ref.Number)
+	return fmt.Sprintf("%s/pulls/%d", repocmdshared.WebURL(ref.Repo), ref.Number)
 }
 
 // NewPRWebURL composes the URL for "/compare/<base>...<head>" with
