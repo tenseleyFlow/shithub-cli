@@ -175,3 +175,57 @@ func TestCheckoutRefusesDirtyWithoutForce(t *testing.T) {
 		t.Fatal("expected error: dirty tree without --force")
 	}
 }
+
+// TestCheckoutSameBranchIsNoOp pins F6: when the user is already on
+// the PR's head branch, `git fetch origin head:head` is refused by git
+// ("refusing to fetch into branch '...' checked out at ..."). The CLI
+// detects the same-branch case up front and short-circuits to a no-op
+// with a friendly notice, matching gh's behavior.
+func TestCheckoutSameBranchIsNoOp(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	src := mkBareSource(t)
+	clone := mkLocalClone(t, src)
+
+	gr, _ := git.FromPath()
+	// Stage: switch the clone to the `feature` branch so the same-branch
+	// guard fires. mkLocalClone leaves us on trunk by default.
+	if err := gr.Run(clone, []string{"fetch", "origin", "feature:feature"}, io.Discard, io.Discard); err != nil {
+		t.Fatalf("seed fetch: %v", err)
+	}
+	if err := gr.Run(clone, []string{"checkout", "feature"}, io.Discard, io.Discard); err != nil {
+		t.Fatalf("seed checkout: %v", err)
+	}
+
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/1", 200, pulls.PR{
+		Number: 1, Title: "feature",
+		Head: pulls.Ref{Ref: "feature", Repo: &pulls.RepoLite{FullName: "o/r"}},
+		Base: pulls.Ref{Ref: "trunk", Repo: &pulls.RepoLite{FullName: "o/r"}},
+	})
+
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(clone); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(cwd) }()
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		GitRunner:   gr,
+		Arg:         "1",
+		Repo:        "o/r",
+		BaseRemote:  "origin",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run should no-op, got: %v", err)
+	}
+	if !strings.Contains(tf.ErrOut.String(), "Already on PR #1") {
+		t.Errorf("expected 'Already on PR #1' notice; got %q", tf.ErrOut.String())
+	}
+	// Still on feature.
+	if b, _ := git.CurrentBranch(gr, clone); b != "feature" {
+		t.Errorf("current branch: got %q want feature", b)
+	}
+}
