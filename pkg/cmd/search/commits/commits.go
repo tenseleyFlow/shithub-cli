@@ -19,6 +19,10 @@ import (
 	searchshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/search/shared"
 )
 
+// commitsTrack names the sprint where shithub's /search/commits endpoint
+// is expected to land. Surfaced in the friendly E29 deferred notice.
+const commitsTrack = "S50 §5 commit search"
+
 type options struct {
 	IO          *iostreams.IOStreams
 	HTTPClient  func(host string) (*api.Client, error)
@@ -141,6 +145,15 @@ func Run(ctx context.Context, opts *options) error {
 	sc := search.NewClient(client)
 	resp, err := sc.Commits(ctx, query, opts.Common.ToOptions())
 	if err != nil {
+		// E-audit E29: shithub's server doesn't have /search/commits
+		// yet, so this 404s. Translate to the deferred notice so the
+		// command exits 2 with a friendly message rather than the bare
+		// `shithub: not found`. Real not-found-because-no-hits returns
+		// a 200 with an empty items array, so a 404 here can only mean
+		// the endpoint itself is absent.
+		if api.IsNotFoundError(err) {
+			return &cmdutil.NotYetSupportedError{Name: "search commits", Track: commitsTrack}
+		}
 		return err
 	}
 	if opts.Exporter.Active() {
