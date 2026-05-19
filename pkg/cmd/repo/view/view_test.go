@@ -135,6 +135,34 @@ func TestViewJSONGhCompatAliases(t *testing.T) {
 	}
 }
 
+// TestViewJSONNameWithOwner pins F2: gh-canonical `nameWithOwner` field
+// alongside the legacy `fullName`. Without the alias, ported gh scripts
+// requesting `--json nameWithOwner` failed validation.
+func TestViewJSONNameWithOwner(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/octo/hello", 200, repos.Repo{
+		Name:     "hello",
+		FullName: "octo/hello",
+		Owner:    repos.Owner{Login: "octo"},
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		RepoArg:     "octo/hello",
+	}
+	opts.Exporter.JSONFields = "nameWithOwner"
+	opts.Exporter.JSONSet = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	if !strings.Contains(out, `"nameWithOwner":"octo/hello"`) {
+		t.Errorf("--json nameWithOwner missing; got %s", out)
+	}
+}
+
 func TestViewRejectsArgAndFlagCombo(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{
