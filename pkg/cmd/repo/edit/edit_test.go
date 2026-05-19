@@ -62,7 +62,12 @@ func TestEditReplaceTopics(t *testing.T) {
 
 func TestEditAddRemoveTopicsMutate(t *testing.T) {
 	tf := cmdutiltest.New(t)
-	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/topics", 200, repos.TopicsPayload{Names: []string{"go", "cli"}})
+	// E-audit E8: ListTopics now reads Topics from the repo view payload
+	// (the server has no GET /topics endpoint — that returned 405 and
+	// broke the RMW path). Register the repo view, not GET /topics.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r", 200, repos.Repo{
+		Name: "r", Topics: []string{"go", "cli"},
+	})
 
 	var body json.RawMessage
 	tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/topics", func(w http.ResponseWriter, r *http.Request) {

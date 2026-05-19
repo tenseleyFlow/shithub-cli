@@ -175,15 +175,20 @@ func (c *Client) ReplaceTopics(ctx context.Context, owner, repo string, names []
 	return out.Names, nil
 }
 
-// ListTopics returns the current topic list. Most consumers prefer the
-// Topics field on a View response; this helper is here for parity.
+// ListTopics returns the current topic list. The server has no
+// dedicated GET /topics endpoint — that returned 405 and broke
+// `repo edit --add-topic` / `--remove-topic` end-to-end (E-audit E8).
+// Topics already ride the repo view payload, so we read them from
+// there. Returns a non-nil empty slice when the repo has none.
 func (c *Client) ListTopics(ctx context.Context, owner, repo string) ([]string, error) {
-	var out TopicsPayload
-	if err := c.api.REST(ctx, http.MethodGet, "/repos/{owner}/{repo}/topics", nil, &out,
-		api.WithOwner(owner), api.WithRepo(repo)); err != nil {
+	r, err := c.View(ctx, owner, repo)
+	if err != nil {
 		return nil, err
 	}
-	return out.Names, nil
+	if r.Topics == nil {
+		return []string{}, nil
+	}
+	return r.Topics, nil
 }
 
 // ReadREADME fetches the README envelope (and decoded content). Pass ref=""
