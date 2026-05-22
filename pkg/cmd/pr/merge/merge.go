@@ -105,8 +105,17 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 //
 //nolint:gocyclo // merge orchestrates strategy selection, head-match,
 func Run(ctx context.Context, opts *options) error {
-	if opts.DisableAuto && (opts.Auto || opts.Merge || opts.Squash || opts.Rebase) {
-		return errors.New("pr merge: --disable-auto cannot combine with merge-strategy or --auto flags")
+	// H4 (H6): --auto / --disable-auto are vapor flags — advertised in
+	// --help, but the server endpoint isn't shipped. Pre-flight reject
+	// with the typed deferred-stub error so the root maps it to exit 2
+	// and scripts can distinguish "feature pending" from a real merge
+	// failure. When auto-merge ships server-side, swap this guard for
+	// the real `pc.EnableAutoMerge / DisableAutoMerge` call paths.
+	if opts.Auto {
+		return &cmdutil.NotYetSupportedError{Name: "shithub pr merge --auto", Track: "shithub auto-merge endpoint"}
+	}
+	if opts.DisableAuto {
+		return &cmdutil.NotYetSupportedError{Name: "shithub pr merge --disable-auto", Track: "shithub auto-merge endpoint"}
 	}
 	if !opts.DisableAuto {
 		if strategyCount(opts) > 1 {
