@@ -113,6 +113,24 @@ func Run(ctx context.Context, opts *options) error {
 	if opts.Undo {
 		return fmt.Errorf("pr ready --undo: ready→draft is not yet supported by the server")
 	}
+
+	// H5: pre-flight the PR state so we don't print "Marked PR as ready"
+	// when the PR is closed/merged or already non-draft. Pre-fix the
+	// server silently accepted the no-op PATCH and the CLI lied.
+	pr, err := pc.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number)
+	if err != nil {
+		return err
+	}
+	if pr.Merged {
+		return fmt.Errorf("pr ready: PR #%d is already merged", ref.Number)
+	}
+	if pr.State == "closed" {
+		return fmt.Errorf("pr ready: PR #%d is closed; reopen first", ref.Number)
+	}
+	if !pr.Draft {
+		return fmt.Errorf("pr ready: PR #%d is already marked as ready", ref.Number)
+	}
+
 	if _, err := pc.Edit(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number, pulls.EditInput{Draft: &draft}); err != nil {
 		return err
 	}
