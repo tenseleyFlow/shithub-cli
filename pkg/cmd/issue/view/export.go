@@ -15,6 +15,10 @@ type exporter struct{}
 
 func (exporter) Fields() []string { return exportableFields }
 
+// F2-15: gh exposes `repository` on issue JSON so scripts can correlate
+// cross-repo lists with a single key. The Issue envelope carries
+// repository when populated by the server; we project owner+name+url
+// (the gh-canonical shape) when present, nil otherwise.
 var exportableFields = []string{
 	"assignees",
 	"author",
@@ -28,6 +32,7 @@ var exportableFields = []string{
 	"milestone",
 	"number",
 	"pinned",
+	"repository",
 	"state",
 	"stateReason",
 	"title",
@@ -63,6 +68,13 @@ func projectIssue(i issues.Issue) map[string]any {
 	if i.Milestone != nil {
 		milestone = map[string]any{"number": i.Milestone.Number, "title": i.Milestone.Title}
 	}
+	var repository any
+	if i.Repository != nil {
+		repository = map[string]any{
+			"name":     i.Repository.Name,
+			"fullName": i.Repository.FullName,
+		}
+	}
 	return map[string]any{
 		"assignees":   assignees,
 		"author":      author,
@@ -76,6 +88,7 @@ func projectIssue(i issues.Issue) map[string]any {
 		"milestone":   milestone,
 		"number":      i.Number,
 		"pinned":      i.Pinned,
+		"repository":  repository,
 		"state":       i.State,
 		"stateReason": i.StateReason,
 		"title":       i.Title,

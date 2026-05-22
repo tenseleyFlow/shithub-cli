@@ -103,6 +103,39 @@ func TestEditAddRemoveTopicsMutate(t *testing.T) {
 	}
 }
 
+// TestEditRemoveTopicNotPresentWarns pins H28: removing a topic that
+// wasn't on the repo used to exit 0 with the success marker; the user
+// had no signal their typo was a no-op. We now emit a stderr note
+// before the PUT, then complete the (idempotent) request.
+func TestEditRemoveTopicNotPresentWarns(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r", 200, repos.Repo{
+		Name: "r", Topics: []string{"go"},
+	})
+	tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/topics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(repos.TopicsPayload{Names: []string{"go"}})
+	})
+
+	opts := &options{
+		IO:           tf.IOStreams,
+		HTTPClient:   tf.Factory.HTTPClient,
+		DefaultHost:  tf.Factory.DefaultHost,
+		RepoArg:      "o/r",
+		RemoveTopics: []string{"nonexistent-topic"},
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	stderr := tf.ErrOut.String()
+	if !strings.Contains(stderr, "nonexistent-topic") {
+		t.Errorf("stderr should warn about missing topic; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "not present") {
+		t.Errorf("stderr should say 'not present'; got: %s", stderr)
+	}
+}
+
 func TestEditNoFlagsErrors(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{

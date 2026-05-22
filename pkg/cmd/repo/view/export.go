@@ -22,17 +22,26 @@ func (exporter) Fields() []string { return exportableFields }
 // (B2): gh's `gh repo view --json` exposes those names, and ported
 // scripts break without them. The legacy `forks`/`stargazers`/`watchers`
 // stay populated for one release cycle.
+// H9 (F2-14): the gh-canonical surface uses `is*` boolean naming and
+// `diskUsage` for size. Add the aliases alongside the existing names
+// so ported scripts get a match without dropping the originals.
+// Server-side gaps (parent, languages, hasIssuesEnabled,
+// hasWikiEnabled, merge-strategy toggles) are queued separately —
+// we expose only fields the response already carries.
 var exportableFields = []string{
 	"archived",
 	"createdAt",
 	"defaultBranch",
 	"description",
+	"diskUsage",
 	"fork",
 	"forkCount",
 	"forks",
 	"fullName",
 	"homepage",
 	"id",
+	"isArchived",
+	"isFork",
 	"isPrivate",
 	"isTemplate",
 	"language",
@@ -75,12 +84,15 @@ func (exporter) Filter(v any) (any, error) {
 		"createdAt":      r.CreatedAt,
 		"defaultBranch":  r.DefaultBranch,
 		"description":    r.Description,
+		"diskUsage":      r.Size,
 		"fork":           r.Fork,
 		"forkCount":      r.Forks,
 		"forks":          r.Forks,
 		"fullName":       r.FullName,
 		"homepage":       r.Homepage,
 		"id":             r.ID,
+		"isArchived":     r.Archived,
+		"isFork":         r.Fork,
 		"isPrivate":      r.Private,
 		"isTemplate":     r.IsTemplate,
 		"language":       r.Language,
