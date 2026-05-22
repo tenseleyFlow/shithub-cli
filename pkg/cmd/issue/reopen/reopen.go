@@ -16,8 +16,10 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 type options struct {
@@ -71,6 +73,14 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	// H2: cross-namespace verb routing — if the number is actually a
+	// PR, surface a friendly redirect rather than leaking the server's
+	// raw 422 about the shared issue/PR PATCH constraint.
+	if err := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "issue", "issue reopen", "reopen"); err != nil {
+		return err
+	}
 
 	if opts.Comment != "" {
 		if _, cerr := ic.AddComment(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number, opts.Comment); cerr != nil {

@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 )
 
 func TestCloseWithReasonAndComment(t *testing.T) {
@@ -96,5 +98,40 @@ func TestCloseWithoutReason(t *testing.T) {
 	_ = json.Unmarshal(patchBody, &p)
 	if _, ok := p["state_reason"]; ok {
 		t.Errorf("state_reason should be omitted when not set: %v", p)
+	}
+}
+
+// TestCloseWrongNamespaceRedirects pins H2: `issue close <PR-number>`
+// surfaces a friendly redirect rather than the server's raw 422 about
+// the shared issue+PR table. Pre-fix the user saw
+// "shithub: shithub API: 422 title, body, state, ... must be edited
+// via PATCH /pulls/{N}".
+func TestCloseWrongNamespaceRedirects(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	// #3 is a PR; the issue endpoint would 404 it.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/3", 200, pulls.PR{Number: 3})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "3",
+		Repo:        "o/r",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("want cross-namespace error, got nil")
+	}
+	if !strings.Contains(err.Error(), "is a pull request") {
+		t.Errorf("error should redirect: %v", err)
+	}
+	if !strings.Contains(err.Error(), "shithub pr close 3") {
+		t.Errorf("error should suggest pr close: %v", err)
+	}
+	// Crucially, NO PATCH should have hit the issues endpoint.
+	for _, c := range tf.Server.Calls() {
+		if c.Method == http.MethodPatch {
+			t.Errorf("unexpected PATCH against issues endpoint: %+v", c)
+		}
 	}
 }

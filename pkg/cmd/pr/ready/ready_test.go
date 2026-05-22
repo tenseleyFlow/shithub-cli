@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
+	"github.com/tenseleyFlow/shithub-cli/internal/issues"
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 )
 
@@ -69,5 +70,31 @@ func TestReadyUndoRejectedClientSide(t *testing.T) {
 		if c.Method == http.MethodPatch {
 			t.Errorf("unexpected PATCH call: %+v", c)
 		}
+	}
+}
+
+// TestReadyWrongNamespaceRedirects pins H2: `pr ready <issue-number>`
+// surfaces a friendly redirect rather than "pull request not found".
+func TestReadyWrongNamespaceRedirects(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	// #5 is an issue; the pulls endpoint would 404.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues/5", 200, issues.Issue{Number: 5})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "5",
+		Repo:        "o/r",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("want cross-namespace error, got nil")
+	}
+	if !strings.Contains(err.Error(), "is an issue") {
+		t.Errorf("error should redirect: %v", err)
+	}
+	if !strings.Contains(err.Error(), "shithub issue ready 5") {
+		t.Errorf("error should suggest issue ready: %v", err)
 	}
 }

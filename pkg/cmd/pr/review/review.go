@@ -22,11 +22,13 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/config"
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
+	"github.com/tenseleyFlow/shithub-cli/internal/issues"
 	"github.com/tenseleyFlow/shithub-cli/internal/markdown"
 	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 type options struct {
@@ -134,6 +136,13 @@ func Run(ctx context.Context, opts *options) error {
 	}
 	if ref.Repo.Host == "" {
 		ref.Repo.Host = fb.Host
+	}
+
+	// H2: cross-namespace verb routing. Submitting a review on an
+	// issue number surfaced "pull request not found"; redirect instead.
+	ic := issues.NewClient(client)
+	if cerr := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr review", "review"); cerr != nil {
+		return cerr
 	}
 
 	if opts.Web {

@@ -18,8 +18,10 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 // validReasons matches GitHub's state_reason enum. Empty reason is also
@@ -89,6 +91,14 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	// H2: cross-namespace verb routing. If the number is a PR (not an
+	// issue), surface a friendly redirect instead of letting the server
+	// PATCH return a raw 422 about the shared issue+PR table.
+	if err := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "issue", "issue close", "close"); err != nil {
+		return err
+	}
 
 	if opts.Comment != "" {
 		if _, cerr := ic.AddComment(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number, opts.Comment); cerr != nil {

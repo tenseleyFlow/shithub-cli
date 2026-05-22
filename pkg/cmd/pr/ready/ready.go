@@ -15,9 +15,11 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
+	"github.com/tenseleyFlow/shithub-cli/internal/issues"
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 type options struct {
@@ -92,6 +94,14 @@ func Run(ctx context.Context, opts *options) error {
 	}
 	if ref.Repo.Host == "" {
 		ref.Repo.Host = fb.Host
+	}
+
+	// H2: cross-namespace verb routing — if the number is actually an
+	// issue, surface a friendly redirect rather than "pull request not
+	// found".
+	ic := issues.NewClient(client)
+	if err := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr ready", "ready"); err != nil {
+		return err
 	}
 
 	draft := opts.Undo

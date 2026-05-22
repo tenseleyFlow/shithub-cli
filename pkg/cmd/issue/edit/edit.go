@@ -21,8 +21,10 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/git"
 	"github.com/tenseleyFlow/shithub-cli/internal/iostreams"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 type options struct {
@@ -124,6 +126,14 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	// H2: cross-namespace verb routing. PATCH on a PR via /issues
+	// surfaces a raw 422 about the shared issue/PR table; redirect
+	// instead.
+	if err := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "issue", "issue edit", "edit"); err != nil {
+		return err
+	}
 
 	// Resolve labels and assignees against the current issue when the
 	// user passed delta flags (we need the existing list to mutate).
