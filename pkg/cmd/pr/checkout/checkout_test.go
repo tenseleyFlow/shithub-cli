@@ -229,3 +229,43 @@ func TestCheckoutSameBranchIsNoOp(t *testing.T) {
 		t.Errorf("current branch: got %q want feature", b)
 	}
 }
+
+// TestCheckoutMergedPRWarns pins H31: pre-fix `pr checkout <merged-PR>`
+// silently succeeded — the local branch was recreated from origin's
+// reflog without any signal that the PR was already merged. Now we
+// surface a warning so users know the remote branch may be gone.
+func TestCheckoutMergedPRWarns(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	src := mkBareSource(t)
+	clone := mkLocalClone(t, src)
+
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/9", 200, pulls.PR{
+		Number: 9, State: "closed", Merged: true,
+		Head: pulls.Ref{Ref: "feature", Repo: &pulls.RepoLite{FullName: "o/r"}},
+		Base: pulls.Ref{Ref: "trunk", Repo: &pulls.RepoLite{FullName: "o/r"}},
+	})
+
+	gr, _ := git.FromPath()
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(clone); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	defer func() { _ = os.Chdir(cwd) }()
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		GitRunner:   gr,
+		Arg:         "9",
+		Repo:        "o/r",
+		BaseRemote:  "origin",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(tf.ErrOut.String(), "is merged") {
+		t.Errorf("expected merged warning in stderr; got %q", tf.ErrOut.String())
+	}
+}

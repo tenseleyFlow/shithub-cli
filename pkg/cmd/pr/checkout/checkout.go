@@ -119,6 +119,20 @@ func Run(ctx context.Context, opts *options) error {
 		return err
 	}
 
+	// H5 (H31): warn when checking out a closed or merged PR. The
+	// remote branch may have been deleted on merge; the local clone
+	// can still find the ref via origin's reflog but the user almost
+	// always wants to know the PR isn't open anymore. Print to stderr
+	// and proceed (we don't refuse — local archeology is a real use
+	// case).
+	if pr.Merged {
+		fmt.Fprintf(opts.IO.ErrOut, "%s PR #%d is merged; checking out the head SHA from before the merge\n",
+			opts.IO.WarningIcon(), pr.Number)
+	} else if pr.State == "closed" {
+		fmt.Fprintf(opts.IO.ErrOut, "%s PR #%d is closed; checking out the head SHA at the time it was closed\n",
+			opts.IO.WarningIcon(), pr.Number)
+	}
+
 	if opts.Detach {
 		return checkoutDetached(opts, pr)
 	}
