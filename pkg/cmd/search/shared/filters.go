@@ -24,7 +24,7 @@ type CommonFlags struct {
 func AddCommonFlags(cmd *cobra.Command, f *CommonFlags, sortDesc, orderDesc string) {
 	cmd.Flags().StringVar(&f.Sort, "sort", "", sortDesc)
 	cmd.Flags().StringVar(&f.Order, "order", "desc", orderDesc)
-	cmd.Flags().IntVarP(&f.Limit, "limit", "L", 30, "max items to return")
+	cmdutil.AddLimitFlag(cmd, &f.Limit, 30, "max items to return")
 	cmd.Flags().BoolVarP(&f.Web, "web", "w", false, "open the search results in a browser")
 }
 
