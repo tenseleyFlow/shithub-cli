@@ -7,9 +7,6 @@
 package run
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
@@ -19,15 +16,8 @@ import (
 	runwatch "github.com/tenseleyFlow/shithub-cli/pkg/cmd/run/watch"
 )
 
-const deferredMessage = "run rerun/cancel/delete not yet supported on this shithub host (see shithub-S41g)"
-
-const deferredExitCode = 2
-
-// exitFn is the indirection that lets tests substitute a non-fatal
-// "exit" recorder. See pkg/cmd/release for the matching pattern.
-var exitFn = os.Exit
-
-// NewCmd builds the `run` parent.
+// NewCmd builds the `run` parent. H4: rerun/cancel/delete stubs
+// migrated to shared cmdutil.NewDeferredCmd factory.
 func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run <command>",
@@ -37,21 +27,14 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(runview.NewCmd(f))
 	cmd.AddCommand(runwatch.NewCmd(f))
 	cmd.AddCommand(rundownload.NewCmd(f))
-	cmd.AddCommand(newDeferredStub("rerun", "Rerun a workflow run (deferred until shithub-S41g)"))
-	cmd.AddCommand(newDeferredStub("cancel", "Cancel an in-progress run (deferred until shithub-S41g)"))
-	cmd.AddCommand(newDeferredStub("delete", "Delete a workflow run (deferred until shithub-S41g)"))
-	return cmd
-}
-
-func newDeferredStub(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name + " <run-id>",
-		Short: short,
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s: %s\n", cmd.CommandPath(), deferredMessage)
-			exitFn(deferredExitCode)
-			return nil
-		},
+	stub := func(name, short string) *cobra.Command {
+		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
+			Use: name + " <run-id>", Short: short,
+			Name: "shithub run " + name, Track: "shithub-S41g",
+		})
 	}
+	cmd.AddCommand(stub("rerun", "Rerun a workflow run (deferred until shithub-S41g)"))
+	cmd.AddCommand(stub("cancel", "Cancel an in-progress run (deferred until shithub-S41g)"))
+	cmd.AddCommand(stub("delete", "Delete a workflow run (deferred until shithub-S41g)"))
+	return cmd
 }
