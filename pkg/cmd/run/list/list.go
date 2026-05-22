@@ -66,7 +66,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Event, "event", "e", "", "filter by event (push, pull_request, workflow_dispatch, ...)")
 	cmd.Flags().StringVarP(&opts.Actor, "user", "u", "", "filter by triggering user login")
 	cmd.Flags().StringVarP(&opts.Status, "status", "s", "", "filter by status (queued|in_progress|completed|success|failure|...)")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "max items to return")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, 30, "max items to return")
 	output.AddFlags(cmd, &opts.Exporter)
 	return cmd
 }

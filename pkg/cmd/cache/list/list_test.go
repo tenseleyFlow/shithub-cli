@@ -91,3 +91,38 @@ func TestHumanSize(t *testing.T) {
 		}
 	}
 }
+
+// TestListRejectsInvalidOrderAndSort pins F35: pre-fix, bogus values
+// for --order / --sort shipped to the server and were silently
+// coerced to defaults. Strict client-side allowlist now refuses them
+// before any round-trip.
+func TestListRejectsInvalidOrderAndSort(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mod  func(*options)
+		want string
+	}{
+		{"order=bogus", func(o *options) { o.Order = "BOGUS" }, "--order"},
+		{"sort=bogus", func(o *options) { o.Sort = "BOGUS" }, "--sort"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tf := cmdutiltest.New(t)
+			opts := &options{
+				IO:          tf.IOStreams,
+				HTTPClient:  tf.Factory.HTTPClient,
+				DefaultHost: tf.Factory.DefaultHost,
+				Repo:        "o/r",
+				Order:       "desc",
+				Limit:       30,
+			}
+			tc.mod(opts)
+			err := Run(context.Background(), opts)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q missing %q", err.Error(), tc.want)
+			}
+		})
+	}
+}

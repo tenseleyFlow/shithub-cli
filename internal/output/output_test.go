@@ -86,6 +86,27 @@ func TestExportRejectsUnknownField(t *testing.T) {
 	}
 }
 
+// TestExportRejectsEmptyJSONField pins H25: stray comma in --json
+// (e.g. `,name` or `id,,name`) used to surface as `unknown JSON field
+// ""`, leaving the user to guess that the empty string was the parsed
+// token. Now we name the input shape directly.
+func TestExportRejectsEmptyJSONField(t *testing.T) {
+	t.Parallel()
+	exp := fakeExporter{fields: []string{"id", "name"}}
+	for _, fields := range []string{",name", "name,", "id,,name", "  ,name"} {
+		var buf bytes.Buffer
+		opts := Options{JSONFields: fields, JSONSet: true}
+		err := Export(&buf, opts, exp, map[string]any{"id": 1, "name": "x"}, false)
+		if err == nil {
+			t.Errorf("fields=%q: expected error", fields)
+			continue
+		}
+		if !strings.Contains(err.Error(), "empty field") {
+			t.Errorf("fields=%q: error should call out the empty field: %v", fields, err)
+		}
+	}
+}
+
 func TestExportJQFilter(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer

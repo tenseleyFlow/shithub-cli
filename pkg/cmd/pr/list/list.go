@@ -89,7 +89,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	// G12 (F41): same as issue list — the flag exists but isn't wired
 	// in the list path. Hide from --help until C13 reaches list.
 	_ = cmd.Flags().MarkHidden("search")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of PRs to fetch")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, DefaultLimit, "maximum number of PRs to fetch")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the PR list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
 	output.MarkWebMutuallyExclusive(cmd)

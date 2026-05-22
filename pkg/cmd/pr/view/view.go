@@ -54,6 +54,14 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			if len(args) > 0 {
+				// H26: pre-fix, `pr view ""` silently fell through to
+				// current-branch lookup and then leaked the local branch
+				// name in the not-found error. An empty positional is a
+				// user mistake (shell expansion, blank var); refuse it
+				// distinctly from the no-arg case.
+				if strings.TrimSpace(args[0]) == "" {
+					return fmt.Errorf("pr view: positional argument is empty; omit it to look up the current branch, or pass a number/URL/branch")
+				}
 				opts.Arg = args[0]
 			}
 			if opts.GitRunner == nil {

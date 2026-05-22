@@ -71,7 +71,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Search, "search", "S", "", "filter by substring match against name/description")
 	cmd.Flags().StringVar(&opts.Sort, "sort", "name", "sort field: {name|created}")
 	cmd.Flags().StringVar(&opts.Direction, "order", "asc", "sort order: {asc|desc}")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of labels to fetch")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, DefaultLimit, "maximum number of labels to fetch")
 	output.AddFlags(cmd, &opts.Exporter)
 	return cmd
 }
