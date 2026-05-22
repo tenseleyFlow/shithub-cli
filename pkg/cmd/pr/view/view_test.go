@@ -156,3 +156,22 @@ func TestViewJSONF4Fields(t *testing.T) {
 		}
 	}
 }
+
+// TestViewRejectsEmptyPositional pins H26: `pr view ""` used to fall
+// through to current-branch lookup, which then leaked the local
+// branch name in the not-found error. Now we reject the empty
+// positional distinctly from the no-arg case.
+func TestViewRejectsEmptyPositional(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	cmd := NewCmd(tf.Factory)
+	cmd.SetArgs([]string{"", "--repo", "o/r"})
+	cmd.SetOut(tf.Out)
+	cmd.SetErr(tf.ErrOut)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("want error for empty positional, got nil")
+	}
+	if !strings.Contains(err.Error(), "positional argument is empty") {
+		t.Errorf("error should name empty positional: %v", err)
+	}
+}
