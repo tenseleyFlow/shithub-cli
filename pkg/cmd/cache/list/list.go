@@ -66,7 +66,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Ref, "ref", "r", "", "filter by git ref (e.g. refs/heads/trunk)")
 	cmd.Flags().StringVarP(&opts.Sort, "sort", "s", "last_accessed_at", "sort field (created_at | last_accessed_at | size_in_bytes)")
 	cmd.Flags().StringVarP(&opts.Order, "order", "O", "desc", "sort order (asc | desc)")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", 30, "max items to return")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, 30, "max items to return")
 	output.AddFlags(cmd, &opts.Exporter)
 	return cmd
 }
@@ -75,6 +75,20 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 func Run(ctx context.Context, opts *options) error {
 	if err := cmdutil.ValidateLimit(opts.Limit); err != nil {
 		return err
+	}
+	// F35: pre-fix, --order BOGUS shipped to the server and the API
+	// silently coerced it to a default (whichever side ignored it
+	// first). Strict client-side allowlist so the user sees the typo
+	// immediately, not after wondering why sort direction is wrong.
+	switch opts.Order {
+	case "asc", "desc":
+	default:
+		return fmt.Errorf("cache list: invalid --order %q (expected one of: asc, desc)", opts.Order)
+	}
+	switch opts.Sort {
+	case "", "created_at", "last_accessed_at", "size_in_bytes":
+	default:
+		return fmt.Errorf("cache list: invalid --sort %q (expected one of: created_at, last_accessed_at, size_in_bytes)", opts.Sort)
 	}
 	resolver := repocmdshared.Resolver{
 		RepoFlag:    opts.Repo,
