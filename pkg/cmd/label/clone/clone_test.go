@@ -121,3 +121,28 @@ func TestCloneForceOverwrites(t *testing.T) {
 		t.Error("expected PATCH on collision with --force")
 	}
 }
+
+// TestCloneRejectsSelf pins H30: when --repo resolves to the same
+// repo as the source positional, refuse pre-flight instead of walking
+// every label only to mark each as "already exists".
+func TestCloneRejectsSelf(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/repos/o/r/labels", func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("source list should not fire — self-clone must be refused pre-flight")
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Source:      "o/r",
+		Repo:        "o/r",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error on self-clone")
+	}
+	if !strings.Contains(err.Error(), "same repo") {
+		t.Errorf("error should name self-clone: %v", err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -85,6 +86,16 @@ func Run(ctx context.Context, opts *options) error {
 	}
 	if srcRef.Host == "" {
 		srcRef.Host = destRef.Host
+	}
+	// H30: self-clone (source and dest resolve to the same repo) walks
+	// every label, marks each as "already exists", and exits 0 with no
+	// useful side-effect. With --force it would overwrite each label
+	// with itself. Refuse the identity case so the user notices the
+	// `-R` typo / duplicated arg before any round-trip.
+	if strings.EqualFold(srcRef.Host, destRef.Host) &&
+		strings.EqualFold(srcRef.Owner, destRef.Owner) &&
+		strings.EqualFold(srcRef.Name, destRef.Name) {
+		return fmt.Errorf("label clone: source and destination are the same repo (%s)", srcRef.FullName())
 	}
 
 	srcClient, err := opts.HTTPClient(srcRef.Host)
