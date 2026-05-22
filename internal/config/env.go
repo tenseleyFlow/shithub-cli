@@ -5,7 +5,21 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 )
+
+// lookupEnvTrim is os.LookupEnv with a TrimSpace pass on the value.
+// We trim because shell users commonly type `SHITHUB_TOKEN=" "` (a
+// single space) intending an explicit-empty override; treating that
+// as "no token" matches the all-whitespace intent. Returns (trimmed
+// value, true) when the var was set in the environment.
+func lookupEnvTrim(key string) (string, bool) {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(v), true
+}
 
 // Env-var names for token + host resolution. Centralized so callers
 // import symbols, not strings; renaming a var here is a one-grep change.
@@ -53,20 +67,38 @@ func ResolveToken(ks KeyringStore, h Hosts, defaultHost, host string) (string, T
 	host = NormalizeHost(host)
 	defaultHost = NormalizeHost(defaultHost)
 
+	// H9: distinguish "env unset" from "env set to empty string". The
+	// latter is an explicit "I want no token" override (useful in CI
+	// or while reproducing an unauthenticated state); pre-fix it
+	// silently fell through to the keyring. We surface it as a
+	// dedicated source so `auth status` doesn't lie about where the
+	// (lack of) token came from.
 	if host == defaultHost {
-		if tok := os.Getenv(EnvToken); tok != "" {
+		if tok, ok := lookupEnvTrim(EnvToken); ok {
+			if tok == "" {
+				return "", TokenSourceEnvEmpty, ErrNoToken
+			}
 			return tok, TokenSourceEnv, nil
 		}
 		if os.Getenv(EnvAcceptGithubToken) == "1" {
-			if tok := os.Getenv(EnvGHToken); tok != "" {
+			if tok, ok := lookupEnvTrim(EnvGHToken); ok {
+				if tok == "" {
+					return "", TokenSourceEnvEmpty, ErrNoToken
+				}
 				return tok, TokenSourceEnv, nil
 			}
-			if tok := os.Getenv(EnvGithubToken); tok != "" {
+			if tok, ok := lookupEnvTrim(EnvGithubToken); ok {
+				if tok == "" {
+					return "", TokenSourceEnvEmpty, ErrNoToken
+				}
 				return tok, TokenSourceEnv, nil
 			}
 		}
 	} else {
-		if tok := os.Getenv(EnvEnterpriseToken); tok != "" {
+		if tok, ok := lookupEnvTrim(EnvEnterpriseToken); ok {
+			if tok == "" {
+				return "", TokenSourceEnvEmpty, ErrNoToken
+			}
 			return tok, TokenSourceEnv, nil
 		}
 	}

@@ -4,11 +4,14 @@ package config
 
 import (
 	"errors"
+	"os"
 	"testing"
 )
 
 // clearTokenEnv unsets every env var ResolveToken consults, so each test
 // starts from a known-clean baseline regardless of the developer's shell.
+// H9: we must actually unset (not set-to-empty), because ResolveToken
+// now distinguishes "unset" from "explicitly empty".
 func clearTokenEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
@@ -19,7 +22,13 @@ func clearTokenEnv(t *testing.T) {
 		EnvGHToken,
 		EnvHost,
 	} {
-		t.Setenv(k, "")
+		old, hadOld := os.LookupEnv(k)
+		_ = os.Unsetenv(k)
+		if hadOld {
+			t.Cleanup(func() { _ = os.Setenv(k, old) })
+		} else {
+			t.Cleanup(func() { _ = os.Unsetenv(k) })
+		}
 	}
 }
 
@@ -152,6 +161,32 @@ func TestResolveTokenInsecureFileWhenKeyringEmpty(t *testing.T) {
 	}
 	if src != TokenSourceInsecureFile {
 		t.Errorf("source: want insecure file, got %v", src)
+	}
+}
+
+// TestResolveTokenEmptyEnvIsExplicitNoToken pins H9: SHITHUB_TOKEN
+// set to an empty (or whitespace-only) string is an explicit "I want
+// no token" override, not "fall through to keyring". Pre-fix it
+// silently used the keyring token; users testing as-unauthenticated
+// had no way to bypass without also unsetting keyring entries.
+func TestResolveTokenEmptyEnvIsExplicitNoToken(t *testing.T) {
+	for _, v := range []string{"", " ", "   ", "\t"} {
+		t.Run("token="+v, func(t *testing.T) {
+			clearTokenEnv(t)
+			t.Setenv(EnvToken, v)
+
+			ks := newFakeKeyring()
+			_ = SetToken(ks, "shithub.sh", "u", "shithub_pat_keyring")
+			h := Hosts{"shithub.sh": {User: "u"}}
+
+			_, src, err := ResolveToken(ks, h, "shithub.sh", "shithub.sh")
+			if !errors.Is(err, ErrNoToken) {
+				t.Errorf("want ErrNoToken, got %v", err)
+			}
+			if src != TokenSourceEnvEmpty {
+				t.Errorf("source: want EnvEmpty, got %v", src)
+			}
+		})
 	}
 }
 
