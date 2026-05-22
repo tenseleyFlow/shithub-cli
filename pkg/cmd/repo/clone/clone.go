@@ -176,10 +176,13 @@ func resolveTarget(target, defaultHost string) (shared.RepoRef, bool, error) {
 // pickURL returns the URL to hand to `git clone`. Prefers the server's
 // echoed URLs when we have metadata, since they're authoritative for the
 // host's canonical case; falls back to the parsed ref / raw input.
-func pickURL(meta *repos.Repo, ref shared.RepoRef, protocol, raw string, fromURL bool) string {
-	if fromURL {
-		return raw
-	}
+func pickURL(meta *repos.Repo, ref shared.RepoRef, protocol, _ string, _ bool) string {
+	// H29: pre-fix, a full-URL input was passed through to git as-is.
+	// Users who copy `https://shithub.sh/owner/repo` from the web UI
+	// got `repository not found` because the server's clone endpoint
+	// expects the canonical `https://host/owner/repo.git` form. We
+	// have the parsed ref either way — rebuild the URL canonically and
+	// drop the raw input.
 	if meta != nil {
 		return pickURLForRepo(meta, protocol)
 	}

@@ -166,6 +166,39 @@ func TestCloneFromURLSkipsMetadataFetch(t *testing.T) {
 	}
 }
 
+// TestCloneURLFormCanonicalizes pins H29: pre-fix, a full URL like
+// `https://host/owner/repo` (no .git suffix) was handed to git
+// verbatim and produced "repository not found". Now we parse the URL,
+// drop the raw input, and rebuild the canonical .git form from the
+// ref.
+func TestCloneURLFormCanonicalizes(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	fr := &fakeRunner{}
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		GitRunner:   fr,
+		Target:      "https://shithub.sh/octo/hello", // no .git
+		Dir:         "/tmp/never-actually-cloned",
+		UpstreamRem: "upstream",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(fr.runs) == 0 {
+		t.Fatal("expected git clone invocation")
+	}
+	// The clone URL is fr.runs[0][1] (after "clone").
+	got := fr.runs[0][1]
+	want := "https://shithub.sh/octo/hello.git"
+	if got != want {
+		t.Errorf("clone URL: got %q want %q", got, want)
+	}
+}
+
 // fakeRunner records git invocations without shelling out. Used by the
 // URL-form clone test to keep the assertion focused on routing logic
 // rather than git's success.
