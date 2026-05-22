@@ -182,6 +182,13 @@ func Export(out io.Writer, opts Options, exporter Exporter, data any, prettyJSON
 		}
 		for _, r := range requested {
 			r = strings.TrimSpace(r)
+			// H25: pre-fix, `--json ",name"` produced `unknown JSON field ""`
+			// — readable as "the empty string isn't a field", not as the
+			// stray comma it actually is. Tell the user the input shape is
+			// wrong before falling into the field-name catalogue.
+			if r == "" {
+				return fmt.Errorf("--json value contains an empty field (check for stray or trailing commas)")
+			}
 			if _, ok := valid[r]; !ok {
 				return fmt.Errorf("unknown JSON field %q; valid: %s", r, strings.Join(exporter.Fields(), ", "))
 			}
