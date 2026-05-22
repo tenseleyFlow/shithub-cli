@@ -177,6 +177,30 @@ func TestValidateHostStrict(t *testing.T) {
 	}
 }
 
+// TestValidateHostRefusesPlaintextScheme pins H17: pre-fix
+// `--hostname http://shithub.sh` was silently coerced to
+// `shithub.sh` and any subsequent request was issued over HTTPS,
+// but the typo signals plaintext intent — and `shithub api
+// http://host/...` (related) would actually leak the bearer token
+// on the first hop. Refuse the explicit http:// prefix.
+func TestValidateHostRefusesPlaintextScheme(t *testing.T) {
+	for _, in := range []string{
+		"http://shithub.sh",
+		"HTTP://Shithub.SH",
+		"  http://shithub.sh  ",
+	} {
+		if _, err := ValidateHost(in); err == nil {
+			t.Errorf("expected refusal for %q", in)
+		} else if !strings.Contains(err.Error(), "plaintext") {
+			t.Errorf("error should call out plaintext for %q: %v", in, err)
+		}
+	}
+	// https:// stays accepted — NormalizeHost strips the prefix.
+	if _, err := ValidateHost("https://shithub.sh"); err != nil {
+		t.Errorf("https should be accepted: %v", err)
+	}
+}
+
 func TestSaveEmptyHostsRemovesFile(t *testing.T) {
 	dir := withConfigDir(t)
 
