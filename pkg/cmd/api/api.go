@@ -226,6 +226,20 @@ func validate(opts *Options) error {
 	if strings.TrimSpace(opts.Endpoint) == "" {
 		return errors.New("api: endpoint path is required (e.g. shithub api user)")
 	}
+	// H17: `shithub api http://shithub.sh/...` sends the bearer token
+	// over plaintext HTTP on the first hop. The server's 308 → HTTPS
+	// is irrelevant — the token is on the wire before the redirect
+	// arrives. Refuse plain http:// for absolute URLs; the user can
+	// drop the scheme or fix the typo.
+	if strings.HasPrefix(strings.ToLower(opts.Endpoint), "http://") {
+		return errors.New("api: refusing plain http:// URL — switch to https:// (the bearer token would otherwise be sent over plaintext before the server's redirect)")
+	}
+	// H18: HTTP methods are case-sensitive per RFC 9110, but every
+	// well-known client uppercases by convention. Pre-fix, `api -X get`
+	// produced a server-side `405 method get not allowed`. Normalize.
+	if opts.Method != "" {
+		opts.Method = strings.ToUpper(opts.Method)
+	}
 	if opts.JQ != "" && opts.Template != "" {
 		return errors.New("api: --jq and --template are mutually exclusive")
 	}
@@ -242,6 +256,15 @@ func validate(opts *Options) error {
 	}
 	if opts.Slurp && !opts.Paginate {
 		return errors.New("api: --slurp requires --paginate")
+	}
+	// H21: pre-fix, `--include --paginate` silently dropped subsequent
+	// pages' headers (Link, X-RateLimit, X-Request-Id…). Multiple
+	// per-page header blocks don't compose into a single stream; rather
+	// than render only the first set and lie about the rest, refuse
+	// the combination. Users debugging headers should drop --paginate
+	// and walk the Link chain themselves.
+	if opts.IncludeHeaders && opts.Paginate {
+		return errors.New("api: --include and --paginate are mutually exclusive (per-page headers can't compose into a single stream); run without --paginate to inspect headers, or drop --include for the merged body")
 	}
 	return nil
 }

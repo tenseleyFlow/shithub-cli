@@ -54,6 +54,11 @@ const (
 	TokenSourceEnv
 	TokenSourceKeyring
 	TokenSourceInsecureFile
+	// TokenSourceEnvEmpty marks the case where SHITHUB_TOKEN (or its
+	// enterprise/github counterparts) was set explicitly to an empty
+	// string. We treat that as "the user wants no token", not "fall
+	// back to keyring" — pre-fix it was silently equivalent to unset.
+	TokenSourceEnvEmpty
 )
 
 // String returns a human-readable label suitable for status output.
@@ -61,6 +66,8 @@ func (s TokenSource) String() string {
 	switch s {
 	case TokenSourceEnv:
 		return "environment"
+	case TokenSourceEnvEmpty:
+		return "environment (empty override)"
 	case TokenSourceKeyring:
 		return "keyring"
 	case TokenSourceInsecureFile:
@@ -261,6 +268,15 @@ func NormalizeHost(host string) string {
 func ValidateHost(host string) (string, error) {
 	if strings.TrimSpace(host) == "" {
 		return "", fmt.Errorf("config: hostname is required")
+	}
+	// H17: refuse explicit `http://` prefix. NormalizeHost would
+	// silently strip it, but the user typing `--hostname
+	// http://shithub.sh` is signaling plaintext intent; we'd rather
+	// hard-fail at parse than ship the bearer token over a 308-bait
+	// first hop. (The unprefixed form is fine — we always issue over
+	// https://.)
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(host)), "http://") {
+		return "", fmt.Errorf("config: %q uses plaintext http:// — drop the scheme (we issue https://) so the bearer token never lands on the wire unencrypted", host)
 	}
 	normalized := NormalizeHost(host)
 	if normalized == "" {

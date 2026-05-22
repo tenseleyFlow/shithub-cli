@@ -149,6 +149,13 @@ func collect(ctx context.Context, opts *Options, hosts config.Hosts) []HostStatu
 		_, src, err := config.ResolveToken(opts.Keyring(), hosts, hosts.DefaultHostName(), host)
 		if err != nil {
 			row.Error = err.Error()
+			// H9: even when ResolveToken returned ErrNoToken, an explicit
+			// empty env-var override carries a TokenSource (EnvEmpty) that
+			// the user needs to see — they typed it on purpose. Surface it
+			// so `auth status` doesn't pretend the keyring is empty.
+			if src != config.TokenSourceUnknown {
+				row.TokenSource = src.String()
+			}
 			out = append(out, row)
 			continue
 		}

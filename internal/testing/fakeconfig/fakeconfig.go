@@ -10,6 +10,7 @@
 package fakeconfig
 
 import (
+	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -38,6 +39,9 @@ func New(t *testing.T) *TestConfig {
 	dir := filepath.Join(t.TempDir(), "shithub")
 	t.Setenv(config.EnvConfigDir, dir)
 	// Defensive: clear inherited env so resolution starts clean.
+	// H9: must actually unset, not set-to-empty — ResolveToken now
+	// distinguishes "unset" (fall through to keyring) from "explicitly
+	// empty" (treat as no-token override).
 	for _, k := range []string{
 		config.EnvToken,
 		config.EnvEnterpriseToken,
@@ -46,7 +50,13 @@ func New(t *testing.T) *TestConfig {
 		config.EnvGHToken,
 		config.EnvHost,
 	} {
-		t.Setenv(k, "")
+		old, hadOld := os.LookupEnv(k)
+		_ = os.Unsetenv(k)
+		if hadOld {
+			t.Cleanup(func() { _ = os.Setenv(k, old) })
+		} else {
+			t.Cleanup(func() { _ = os.Unsetenv(k) })
+		}
 	}
 
 	return &TestConfig{
