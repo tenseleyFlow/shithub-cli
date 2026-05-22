@@ -14,33 +14,14 @@
 package gist
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 )
 
-// deferredMessage is the single source of truth printed to stderr.
-const deferredMessage = "gists not yet supported on this shithub host (see shithub-S49); subcommand registered for future use"
-
-// deferredExitCode is exit(2) — distinct from exit(1) (genuine failures)
-// so scripts can branch on "feature pending" without string matching.
-const deferredExitCode = 2
-
-// exitFn is the indirection that lets tests substitute a non-fatal
-// "exit" recorder.  Same pattern as pkg/cmd/release.
-var exitFn = os.Exit
-
-func runDeferred(cmd *cobra.Command, _ []string) error {
-	fmt.Fprintf(cmd.ErrOrStderr(), "%s: %s\n", cmd.CommandPath(), deferredMessage)
-	exitFn(deferredExitCode)
-	return nil
-}
-
 // NewCmd builds the `gist` parent and attaches the seven planned
-// subcommands as stubs.
+// subcommands as stubs. H4 migration: shared cmdutil.NewDeferredCmd
+// factory now handles -R / --hostname / --json / --jq / --template.
 func NewCmd(_ *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gist <command>",
@@ -51,23 +32,18 @@ This command tree is registered today so the planned flag surface is
 discoverable, but the underlying shithub gist model (S49) is parked.
 Every invocation exits 2 with a friendly notice until S49 lands.`,
 	}
-	cmd.AddCommand(newStub("create", "Create a new gist from files or stdin (deferred)"))
-	cmd.AddCommand(newStub("list", "List your gists (deferred)"))
-	cmd.AddCommand(newStub("view", "Show a gist's metadata and contents (deferred)"))
-	cmd.AddCommand(newStub("edit", "Add, remove, or rewrite files in a gist (deferred)"))
-	cmd.AddCommand(newStub("clone", "Clone a gist as a local git repo (deferred)"))
-	cmd.AddCommand(newStub("delete", "Delete a gist (deferred)"))
-	cmd.AddCommand(newStub("rename", "Rename a file within a gist (deferred)"))
-	return cmd
-}
-
-// newStub builds one deferred subcommand. We deliberately don't define
-// flags — flag-shape compatibility isn't useful until the implementation
-// lands, and stubbed flag help would mislead more than the bare notice.
-func newStub(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name,
-		Short: short,
-		RunE:  runDeferred,
+	stub := func(name, short string) *cobra.Command {
+		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
+			Use: name, Short: short,
+			Name: "shithub gist " + name, Track: "shithub-S49",
+		})
 	}
+	cmd.AddCommand(stub("create", "Create a new gist from files or stdin (deferred)"))
+	cmd.AddCommand(stub("list", "List your gists (deferred)"))
+	cmd.AddCommand(stub("view", "Show a gist's metadata and contents (deferred)"))
+	cmd.AddCommand(stub("edit", "Add, remove, or rewrite files in a gist (deferred)"))
+	cmd.AddCommand(stub("clone", "Clone a gist as a local git repo (deferred)"))
+	cmd.AddCommand(stub("delete", "Delete a gist (deferred)"))
+	cmd.AddCommand(stub("rename", "Rename a file within a gist (deferred)"))
+	return cmd
 }

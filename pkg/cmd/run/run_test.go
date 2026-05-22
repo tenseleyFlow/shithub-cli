@@ -3,22 +3,14 @@
 package run
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 )
-
-func captureExit(t *testing.T) (*int, func()) {
-	t.Helper()
-	prev := exitFn
-	var got int
-	exitFn = func(code int) { got = code }
-	return &got, func() { exitFn = prev }
-}
 
 func findSubcommand(cmds []*cobra.Command, name string) *cobra.Command {
 	for _, c := range cmds {
@@ -38,20 +30,12 @@ func TestDeferredStubsExit(t *testing.T) {
 			if sub == nil {
 				t.Fatalf("subcommand %q not registered", name)
 			}
-			gotCode, restore := captureExit(t)
-			t.Cleanup(restore)
-
-			var stderr bytes.Buffer
-			sub.SetErr(&stderr)
-			sub.SetOut(&bytes.Buffer{})
-			if err := sub.RunE(sub, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
+			err := sub.RunE(sub, nil)
+			if !cmdutil.IsNotYetSupported(err) {
+				t.Errorf("want NotYetSupportedError, got %v", err)
 			}
-			if *gotCode != deferredExitCode {
-				t.Errorf("exit code: want %d got %d", deferredExitCode, *gotCode)
-			}
-			if !strings.Contains(stderr.String(), deferredMessage) {
-				t.Errorf("stderr missing deferred message: %q", stderr.String())
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("error should reference subcommand %q: %v", name, err)
 			}
 		})
 	}

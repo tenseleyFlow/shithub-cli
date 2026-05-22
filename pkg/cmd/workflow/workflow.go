@@ -7,9 +7,6 @@
 package workflow
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
@@ -18,15 +15,8 @@ import (
 	workflowview "github.com/tenseleyFlow/shithub-cli/pkg/cmd/workflow/view"
 )
 
-const deferredMessage = "workflow enable/disable not yet supported on this shithub host (see shithub-S41g)"
-
-const deferredExitCode = 2
-
-// exitFn is the indirection that lets tests substitute a non-fatal
-// "exit" recorder. See pkg/cmd/release for the matching pattern.
-var exitFn = os.Exit
-
-// NewCmd builds the `workflow` parent.
+// NewCmd builds the `workflow` parent. H4: enable/disable migrated to
+// shared cmdutil.NewDeferredCmd factory.
 func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workflow <command>",
@@ -35,20 +25,13 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.AddCommand(workflowlist.NewCmd(f))
 	cmd.AddCommand(workflowview.NewCmd(f))
 	cmd.AddCommand(workflowrun.NewCmd(f))
-	cmd.AddCommand(newDeferredStub("enable", "Enable a workflow (deferred until shithub-S41g)"))
-	cmd.AddCommand(newDeferredStub("disable", "Disable a workflow (deferred until shithub-S41g)"))
-	return cmd
-}
-
-func newDeferredStub(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name + " <id-or-file>",
-		Short: short,
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s: %s\n", cmd.CommandPath(), deferredMessage)
-			exitFn(deferredExitCode)
-			return nil
-		},
+	stub := func(name, short string) *cobra.Command {
+		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
+			Use: name + " <id-or-file>", Short: short,
+			Name: "shithub workflow " + name, Track: "shithub-S41g",
+		})
 	}
+	cmd.AddCommand(stub("enable", "Enable a workflow (deferred until shithub-S41g)"))
+	cmd.AddCommand(stub("disable", "Disable a workflow (deferred until shithub-S41g)"))
+	return cmd
 }

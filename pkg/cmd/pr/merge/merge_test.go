@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	"github.com/tenseleyFlow/shithub-cli/internal/repos"
@@ -55,58 +56,12 @@ func TestMergeSquashDeletesBranch(t *testing.T) {
 	}
 }
 
-func TestMergeAutoEnable(t *testing.T) {
-	tf := cmdutiltest.New(t)
-	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/1", 200, pulls.PR{
-		Number: 1, State: "open", Head: pulls.Ref{SHA: "abc"},
-	})
-	var body json.RawMessage
-	tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/pulls/1/auto-merge", func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		body = b
-		w.WriteHeader(http.StatusOK)
-	})
-	// merge endpoint must NOT be called when --auto is set.
-	tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/pulls/1/merge", func(_ http.ResponseWriter, _ *http.Request) {
-		t.Error("merge endpoint should not be hit when --auto enabled")
-	})
-
-	opts := &options{
-		IO:          tf.IOStreams,
-		HTTPClient:  tf.Factory.HTTPClient,
-		DefaultHost: tf.Factory.DefaultHost,
-		Arg:         "1",
-		Repo:        "o/r",
-		Auto:        true,
-		Squash:      true,
-	}
-	if err := Run(context.Background(), opts); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if !strings.Contains(string(body), `"merge_method":"squash"`) {
-		t.Errorf("auto-merge body: %s", body)
-	}
-}
-
-func TestMergeDisableAuto(t *testing.T) {
-	tf := cmdutiltest.New(t)
-	tf.Server.Handle(http.MethodDelete, "/api/v1/repos/o/r/pulls/1/auto-merge", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	opts := &options{
-		IO:          tf.IOStreams,
-		HTTPClient:  tf.Factory.HTTPClient,
-		DefaultHost: tf.Factory.DefaultHost,
-		Arg:         "1",
-		Repo:        "o/r",
-		DisableAuto: true,
-	}
-	if err := Run(context.Background(), opts); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	tf.Server.AssertCalled(http.MethodDelete, "/api/v1/repos/o/r/pulls/1/auto-merge")
-}
+// TestMergeAutoEnable + TestMergeDisableAuto were removed by H4: the
+// server-side auto-merge endpoint isn't shipped (vapor flag, H-audit
+// finding H6). The tests registered fake endpoints that masked the
+// "not found" the user actually sees. Replaced by
+// TestMergeAutoRejectedClientSide / TestMergeDisableAutoRejectedClientSide
+// at the bottom of this file which pin the client-side reject.
 
 func TestMergeMatchHeadMismatchErrors(t *testing.T) {
 	tf := cmdutiltest.New(t)
@@ -299,5 +254,50 @@ func TestMergeInsertPRBody(t *testing.T) {
 	}
 	if !strings.Contains(string(body), `"commit_message":"PR body text"`) {
 		t.Errorf("PR body not inserted: %s", body)
+	}
+}
+
+// TestMergeAutoRejectedClientSide pins H6: `pr merge --auto` is a
+// vapor flag — the server doesn't implement auto-merge. Pre-fix the
+// CLI sent the request and the user got "shithub: not found" exit 1.
+// Now the guard returns NotYetSupportedError, which the root maps to
+// exit 2 so scripts can distinguish "feature pending" from a real
+// failure.
+func TestMergeAutoRejectedClientSide(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "1",
+		Repo:        "o/r",
+		Auto:        true,
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected NotYetSupportedError")
+	}
+	if !cmdutil.IsNotYetSupported(err) {
+		t.Errorf("not a NotYetSupportedError: %v", err)
+	}
+	// No request should have hit the server — the guard runs first.
+	if len(tf.Server.Calls()) > 0 {
+		t.Errorf("unexpected API call: %+v", tf.Server.Calls())
+	}
+}
+
+func TestMergeDisableAutoRejectedClientSide(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "1",
+		Repo:        "o/r",
+		DisableAuto: true,
+	}
+	err := Run(context.Background(), opts)
+	if !cmdutil.IsNotYetSupported(err) {
+		t.Errorf("want NotYetSupportedError, got %v", err)
 	}
 }

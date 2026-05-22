@@ -3,28 +3,17 @@
 package release
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 )
 
-// captureExit swaps exitFn for a recorder that stores the code instead
-// of terminating the test process. Returns the captured code pointer
-// and a restore func.
-func captureExit(t *testing.T) (*int, func()) {
-	t.Helper()
-	prev := exitFn
-	var got int
-	exitFn = func(code int) { got = code }
-	return &got, func() { exitFn = prev }
-}
-
 // TestEverySubcommandDefers walks each registered release subcommand
-// and asserts that invoking it produces the deferred message + exit
-// code 2. The walk catches new additions automatically — adding an
-// unstubbed subcommand without the deferred Run would fail here.
+// and asserts that invoking it returns a NotYetSupportedError. The
+// walk catches new additions automatically — adding an unstubbed
+// subcommand without the deferred Run would fail here.
 func TestEverySubcommandDefers(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	parent := NewCmd(tf.Factory)
@@ -32,24 +21,15 @@ func TestEverySubcommandDefers(t *testing.T) {
 	for _, sub := range parent.Commands() {
 		name := sub.Name()
 		t.Run(name, func(t *testing.T) {
-			gotCode, restore := captureExit(t)
-			t.Cleanup(restore)
-
-			var stderr bytes.Buffer
-			sub.SetErr(&stderr)
-			sub.SetOut(&bytes.Buffer{})
-
-			if err := sub.RunE(sub, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
+			err := sub.RunE(sub, nil)
+			if err == nil {
+				t.Fatal("RunE returned nil; expected NotYetSupportedError")
 			}
-			if *gotCode != deferredExitCode {
-				t.Errorf("exit code: want %d got %d", deferredExitCode, *gotCode)
+			if !cmdutil.IsNotYetSupported(err) {
+				t.Errorf("not a NotYetSupportedError: %v", err)
 			}
-			if !strings.Contains(stderr.String(), deferredMessage) {
-				t.Errorf("stderr missing deferred message: %q", stderr.String())
-			}
-			if !strings.Contains(stderr.String(), name) {
-				t.Errorf("stderr missing subcommand name %q: %q", name, stderr.String())
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("error should reference subcommand name %q: %v", name, err)
 			}
 		})
 	}
@@ -77,5 +57,27 @@ func TestParentListsExpectedSubcommands(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Errorf("got %d subcommands, want %d (got=%v)", len(got), len(want), got)
+	}
+}
+
+// TestUniversalFlagsAccepted pins H22/H23: every deferred stub now
+// accepts -R / --hostname / --json / --jq / --template at parse time.
+func TestUniversalFlagsAccepted(t *testing.T) {
+	for _, args := range [][]string{
+		{"list", "-R", "foo/bar"},
+		{"list", "--hostname", "shithub.sh"},
+		{"list", "--json", "title"},
+		{"list", "--jq", ".title"},
+		{"list", "--template", "{{.}}"},
+	} {
+		tf := cmdutiltest.New(t)
+		parent := NewCmd(tf.Factory)
+		parent.SetArgs(args)
+		parent.SetErr(tf.ErrOut)
+		parent.SetOut(tf.Out)
+		err := parent.Execute()
+		if !cmdutil.IsNotYetSupported(err) {
+			t.Errorf("args=%v: want NotYetSupportedError, got %v", args, err)
+		}
 	}
 }
