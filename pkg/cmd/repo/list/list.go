@@ -85,7 +85,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.SourceOnly, "source", false, "show only non-fork repositories")
 	cmd.Flags().StringVar(&opts.Sort, "sort", "updated", "sort field: {created|updated|pushed|name}")
 	cmd.Flags().StringVar(&opts.Direction, "order", "desc", "sort order: {asc|desc}")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of repositories to list (max 1000)")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, DefaultLimit, "maximum number of repositories to list (max 1000)")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the repository list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
 	// TODO(D3a-followup): add output.MarkWebMutuallyExclusive(cmd)
