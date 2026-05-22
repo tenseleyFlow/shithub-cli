@@ -27,6 +27,54 @@ func TestSetPersistsAlias(t *testing.T) {
 	}
 }
 
+// TestSetThroughCobraAcceptsFlagShapedExpansion pins H24: cobra used
+// to eat `--help` (and any other -- prefix) from the expansion arg,
+// printing help text and silently dropping the alias. We now disable
+// flag parsing on `alias set` and walk argv ourselves.
+func TestSetThroughCobraAcceptsFlagShapedExpansion(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		argv       []string
+	}{
+		{"--help directly", "--help", []string{"x", "--help"}},
+		{"separator workaround", "--help", []string{"y", "--", "--help"}},
+		{"unknown flag-like", "--whatever -v", []string{"z", "--whatever -v"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tf := cmdutiltest.New(t)
+			cmd := newSetCmd(tf.Factory)
+			cmd.SetArgs(tc.argv)
+			cmd.SetOut(tf.Out)
+			cmd.SetErr(tf.ErrOut)
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			cfg, _ := tf.Factory.Config()
+			if cfg.Aliases[tc.argv[0]] != tc.want {
+				t.Errorf("expansion: got %q want %q (aliases=%v)", cfg.Aliases[tc.argv[0]], tc.want, cfg.Aliases)
+			}
+		})
+	}
+}
+
+// TestSetThroughCobraShellFlag pins that --shell still works when
+// passed at parse-time alongside the expansion (parsing is disabled
+// on the command; parseSetArgs reads --shell from argv directly).
+func TestSetThroughCobraShellFlag(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	cmd := newSetCmd(tf.Factory)
+	cmd.SetArgs([]string{"--shell", "mine", "shithub pr list --author @me"})
+	cmd.SetOut(tf.Out)
+	cmd.SetErr(tf.ErrOut)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	cfg, _ := tf.Factory.Config()
+	if !strings.HasPrefix(cfg.Aliases["mine"], "!") {
+		t.Errorf("--shell should prepend '!', got %q", cfg.Aliases["mine"])
+	}
+}
+
 func TestSetShellFlagPrependsBang(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &setOptions{
