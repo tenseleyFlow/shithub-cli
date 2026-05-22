@@ -90,7 +90,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	// the flag remains valid on the command line (back-compat with
 	// scripts that pass it) but no longer self-advertises.
 	_ = cmd.Flags().MarkHidden("search")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of issues to fetch")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, DefaultLimit, "maximum number of issues to fetch")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the issues list in a browser")
 	output.AddFlags(cmd, &opts.Exporter)
 	output.MarkWebMutuallyExclusive(cmd)
