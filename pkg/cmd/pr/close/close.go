@@ -22,6 +22,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
+	"github.com/tenseleyFlow/shithub-cli/pkg/cmd/shared/crosskind"
 )
 
 type options struct {
@@ -164,6 +165,15 @@ func resolveAndView(ctx context.Context, opts *options) (prshared.PRRef, *pulls.
 	}
 	pr, err := pc.View(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number)
 	if err != nil {
+		// H2: if pc.View returned not-found, check whether the number
+		// is actually an issue and surface a friendly redirect instead
+		// of "pull request not found".
+		if api.IsNotFoundError(err) {
+			ic := issues.NewClient(client)
+			if cerr := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr close", "close"); cerr != nil {
+				return prshared.PRRef{}, nil, cerr
+			}
+		}
 		return prshared.PRRef{}, nil, err
 	}
 	return ref, pr, nil
