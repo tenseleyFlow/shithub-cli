@@ -59,7 +59,7 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.Hostname, "hostname", "", "the shithub host (default: configured host)")
-	cmd.Flags().IntVarP(&opts.Limit, "limit", "L", DefaultLimit, "maximum number of organizations to list")
+	cmdutil.AddLimitFlag(cmd, &opts.Limit, DefaultLimit, "maximum number of organizations to list")
 	output.AddFlags(cmd, &opts.Exporter)
 	return cmd
 }
