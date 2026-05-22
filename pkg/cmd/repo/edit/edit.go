@@ -169,6 +169,25 @@ func Run(ctx context.Context, opts *options) error {
 		HasDiscussions:    opts.EnableDiscussions,
 	}
 
+	// H27: pre-fix, `--add-topic ""` produced `opts.AddTopics = [""]` —
+	// len > 0, so the "nothing to do" guard never fired and an empty
+	// topic shipped through ReplaceTopics. Scrub blanks here and call
+	// out the specific flag that needed a value.
+	for _, name := range []struct {
+		flag string
+		vals *[]string
+	}{
+		{"--topic", &opts.Topics},
+		{"--add-topic", &opts.AddTopics},
+		{"--remove-topic", &opts.RemoveTopics},
+	} {
+		for _, v := range *name.vals {
+			if strings.TrimSpace(v) == "" {
+				return fmt.Errorf("repo edit: %s requires a non-empty topic name", name.flag)
+			}
+		}
+	}
+
 	if patch.IsEmpty() && len(opts.Topics) == 0 && len(opts.AddTopics) == 0 && len(opts.RemoveTopics) == 0 {
 		return fmt.Errorf("repo edit: nothing to do; pass at least one flag")
 	}

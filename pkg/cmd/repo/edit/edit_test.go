@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
@@ -112,6 +113,41 @@ func TestEditNoFlagsErrors(t *testing.T) {
 	}
 	if err := Run(context.Background(), opts); err == nil {
 		t.Fatal("expected error when no edit flags set")
+	}
+}
+
+// TestEditRejectsEmptyTopic pins H27: an empty / whitespace topic
+// value (`--add-topic ""`, `--remove-topic " "`) used to slip past
+// the "nothing to do" guard and ship an empty topic through
+// ReplaceTopics. Each topic flag now refuses a blank value with a
+// flag-specific error.
+func TestEditRejectsEmptyTopic(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts func(*options)
+		want string
+	}{
+		{"add empty", func(o *options) { o.AddTopics = []string{""} }, "--add-topic"},
+		{"remove blank", func(o *options) { o.RemoveTopics = []string{"  "} }, "--remove-topic"},
+		{"replace empty", func(o *options) { o.Topics = []string{""} }, "--topic"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tf := cmdutiltest.New(t)
+			opts := &options{
+				IO:          tf.IOStreams,
+				HTTPClient:  tf.Factory.HTTPClient,
+				DefaultHost: tf.Factory.DefaultHost,
+				RepoArg:     "o/r",
+			}
+			tc.opts(opts)
+			err := Run(context.Background(), opts)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q missing %q", err.Error(), tc.want)
+			}
+		})
 	}
 }
 
