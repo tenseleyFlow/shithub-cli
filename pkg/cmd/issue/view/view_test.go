@@ -115,3 +115,33 @@ func TestViewArgURLOverridesRepoFlag(t *testing.T) {
 		t.Errorf("URL form should win: %s", tf.Out.String())
 	}
 }
+
+// TestViewJSONRepositoryField pins F2-15: `--json repository` used to
+// error with `unknown JSON field`. The Issue envelope carries the
+// repository ref when the server sends it; we project name+fullName.
+func TestViewJSONRepositoryField(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues/1", 200, issues.Issue{
+		Number: 1, Title: "hi", State: "open",
+		User:       &api.User{Login: "octo"},
+		Repository: &issues.RepoRef{Name: "r", FullName: "o/r"},
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(string) error { return nil },
+		Arg:         "1",
+		Repo:        "o/r",
+	}
+	opts.Exporter.JSONFields = "repository"
+	opts.Exporter.JSONSet = true
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	out := tf.Out.String()
+	if !strings.Contains(out, `"fullName":"o/r"`) {
+		t.Errorf("--json repository missing fullName; got %s", out)
+	}
+}
