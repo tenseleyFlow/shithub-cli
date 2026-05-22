@@ -215,6 +215,60 @@ func TestRunPaginateRejectsNonArrayResponse(t *testing.T) {
 	}
 }
 
+// TestRunRefusesPlaintextURL pins H17: an absolute http:// endpoint
+// would send the bearer token over plaintext on the first hop before
+// the server's 308→HTTPS arrived. We refuse at validate.
+func TestRunRefusesPlaintextURL(t *testing.T) {
+	opts, _ := newOpts(t)
+	opts.Endpoint = "http://shithub.sh/api/v1/user"
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected refusal for plaintext http URL")
+	}
+	if !strings.Contains(err.Error(), "plain http://") {
+		t.Errorf("error should call out plaintext: %v", err)
+	}
+}
+
+// TestRunUppercasesMethod pins H18: -X get used to surface a server-
+// side `405 method get not allowed`. The CLI now uppercases.
+func TestRunUppercasesMethod(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "u"
+	opts.Method = "get"
+
+	var seen string
+	tf.Server.Handle("GET", "/api/v1/u", func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Method
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{}`))
+	})
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if seen != "GET" {
+		t.Errorf("method on wire: got %q want GET", seen)
+	}
+}
+
+// TestRunRefusesIncludeWithPaginate pins H21: per-page header blocks
+// don't compose into a single output stream — pre-fix only the first
+// page's headers were emitted, the rest silently dropped. Refuse the
+// combination at validate.
+func TestRunRefusesIncludeWithPaginate(t *testing.T) {
+	opts, _ := newOpts(t)
+	opts.Endpoint = "u"
+	opts.IncludeHeaders = true
+	opts.Paginate = true
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected refusal")
+	}
+	if !strings.Contains(err.Error(), "--include and --paginate") {
+		t.Errorf("error should name the combo: %v", err)
+	}
+}
+
 func TestRunMutexJQAndTemplate(t *testing.T) {
 	opts, _ := newOpts(t)
 	opts.Endpoint = "u"
