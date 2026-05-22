@@ -3,23 +3,16 @@
 package ruleset
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 )
 
-func captureExit(t *testing.T) (*int, func()) {
-	t.Helper()
-	prev := exitFn
-	var got int
-	exitFn = func(code int) { got = code }
-	return &got, func() { exitFn = prev }
-}
-
 // TestEverySubcommandDefers walks every registered subcommand and
-// asserts the deferred message + exit 2 contract.
+// asserts the deferred message contract: each subcommand returns a
+// NotYetSupportedError that the root translates into exit 2.
 func TestEverySubcommandDefers(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	parent := NewCmd(tf.Factory)
@@ -27,24 +20,15 @@ func TestEverySubcommandDefers(t *testing.T) {
 	for _, sub := range parent.Commands() {
 		name := sub.Name()
 		t.Run(name, func(t *testing.T) {
-			gotCode, restore := captureExit(t)
-			t.Cleanup(restore)
-
-			var stderr bytes.Buffer
-			sub.SetErr(&stderr)
-			sub.SetOut(&bytes.Buffer{})
-
-			if err := sub.RunE(sub, nil); err != nil {
-				t.Fatalf("RunE: %v", err)
+			err := sub.RunE(sub, nil)
+			if err == nil {
+				t.Fatal("RunE returned nil; expected NotYetSupportedError")
 			}
-			if *gotCode != deferredExitCode {
-				t.Errorf("exit code: want %d got %d", deferredExitCode, *gotCode)
+			if !cmdutil.IsNotYetSupported(err) {
+				t.Errorf("not a NotYetSupportedError: %v", err)
 			}
-			if !strings.Contains(stderr.String(), deferredMessage) {
-				t.Errorf("stderr missing deferred message: %q", stderr.String())
-			}
-			if !strings.Contains(stderr.String(), name) {
-				t.Errorf("stderr missing subcommand name %q: %q", name, stderr.String())
+			if !strings.Contains(err.Error(), name) {
+				t.Errorf("error should reference subcommand name %q: %v", name, err)
 			}
 		})
 	}
@@ -66,5 +50,33 @@ func TestParentRegistersExpectedSubcommands(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Errorf("got %d subcommands, want %d (got=%v)", len(got), len(want), got)
+	}
+}
+
+// TestSubcommandAcceptsUniversalFlags pins H22/H23: every deferred
+// stub now accepts -R / --hostname / --json / --jq / --template at
+// flag parsing (UnknownFlags whitelist) — the deferred notice fires
+// regardless of how the user invoked the command.
+func TestSubcommandAcceptsUniversalFlags(t *testing.T) {
+	for _, args := range [][]string{
+		{"list", "-R", "foo/bar"},
+		{"list", "--hostname", "shithub.sh"},
+		{"list", "--json", "name"},
+		{"list", "--jq", ".name"},
+		{"list", "--template", "{{.}}"},
+	} {
+		tf := cmdutiltest.New(t)
+		parent := NewCmd(tf.Factory)
+		parent.SetArgs(args)
+		parent.SetErr(tf.ErrOut)
+		parent.SetOut(tf.Out)
+		err := parent.Execute()
+		if err == nil {
+			t.Errorf("args=%v: want NotYetSupportedError, got nil", args)
+			continue
+		}
+		if !cmdutil.IsNotYetSupported(err) {
+			t.Errorf("args=%v: want NotYetSupportedError, got %v", args, err)
+		}
 	}
 }
