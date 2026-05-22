@@ -13,6 +13,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/api"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/issues"
+	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 )
 
 func TestCommentCreate(t *testing.T) {
@@ -174,5 +175,35 @@ func TestCommentWebOpensURL(t *testing.T) {
 	}
 	if !strings.HasSuffix(opened, "/o/r/pulls/1") {
 		t.Errorf("URL: %q", opened)
+	}
+}
+
+// TestCommentPostNewEmitsSuccessLine pins H13: when the server omits
+// `html_url` on the created comment envelope, the CLI must still emit
+// a success marker on stderr. Pre-fix `pr comment` exited silently in
+// this case while `issue comment` correctly printed `✓ Commented on
+// owner/repo#N`. Scripts grepping for the marker saw `pr comment` as a
+// silent failure.
+func TestCommentPostNewEmitsSuccessLine(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	// Stage the cross-namespace check + comment POST. Critically the
+	// AddComment response has NO html_url, exercising the silent-fail
+	// branch.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/3", 200, pulls.PR{Number: 3})
+	tf.Server.RegisterJSON(http.MethodPost, "/api/v1/repos/o/r/issues/3/comments", 201, issues.Comment{ID: 9})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "3",
+		Repo:        "o/r",
+		Body:        "thanks!",
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(tf.ErrOut.String(), "Commented on o/r#3") {
+		t.Errorf("expected success line in stderr; got %q", tf.ErrOut.String())
 	}
 }

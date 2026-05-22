@@ -163,6 +163,11 @@ func Run(ctx context.Context, opts *options) error {
 
 // postNew is the shared "POST a fresh comment" path used by the default
 // flow and by --create-if-none.
+//
+// H13: emit a success marker on stderr when the HTML URL isn't returned
+// (the server may omit it on freshly-created comments depending on the
+// envelope). Pre-fix the function exited silently — scripts grepping
+// for the "✓ Commented on …" marker thought the call failed.
 func postNew(ctx context.Context, ic *issues.Client, io *iostreams.IOStreams, ref prshared.PRRef, body string) error {
 	created, err := ic.AddComment(ctx, ref.Repo.Owner, ref.Repo.Name, ref.Number, body)
 	if err != nil {
@@ -170,7 +175,10 @@ func postNew(ctx context.Context, ic *issues.Client, io *iostreams.IOStreams, re
 	}
 	if created.HTMLURL != "" {
 		fmt.Fprintln(io.Out, created.HTMLURL)
+		return nil
 	}
+	fmt.Fprintf(io.ErrOut, "%s Commented on %s/%s#%d\n",
+		io.SuccessIcon(), ref.Repo.Owner, ref.Repo.Name, ref.Number)
 	return nil
 }
 

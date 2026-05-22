@@ -17,6 +17,11 @@ import (
 
 func TestReadyFlipsDraftFalse(t *testing.T) {
 	tf := cmdutiltest.New(t)
+	// H5: ready does a GET first to pre-flight state, so the test must
+	// stage a draft PR for the View call.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/1", 200, pulls.PR{
+		Number: 1, State: "open", Draft: true,
+	})
 	var body json.RawMessage
 	tf.Server.Handle(http.MethodPatch, "/api/v1/repos/o/r/pulls/1", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -39,6 +44,55 @@ func TestReadyFlipsDraftFalse(t *testing.T) {
 	_ = json.Unmarshal(body, &p)
 	if p["draft"] != false {
 		t.Errorf("draft: %v", p)
+	}
+}
+
+// TestReadyOnMergedPRRefuses pins H5: pre-fix the CLI lied with
+// "Marked PR as ready" after the server silently accepted the no-op
+// PATCH on a merged PR. Now it surfaces the merged state up front.
+func TestReadyOnMergedPRRefuses(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/3", 200, pulls.PR{
+		Number: 3, State: "closed", Merged: true,
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "3",
+		Repo:        "o/r",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error on merged PR")
+	}
+	if !strings.Contains(err.Error(), "already merged") {
+		t.Errorf("error should mention merged: %v", err)
+	}
+}
+
+// TestReadyOnReadyPRRefuses pins H5: same lie shape, ready PR (not
+// draft). Now refused with a clear message.
+func TestReadyOnReadyPRRefuses(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/pulls/7", 200, pulls.PR{
+		Number: 7, State: "open", Draft: false,
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Arg:         "7",
+		Repo:        "o/r",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when PR is already ready")
+	}
+	if !strings.Contains(err.Error(), "already marked as ready") {
+		t.Errorf("error should mention already ready: %v", err)
 	}
 }
 
