@@ -15,30 +15,13 @@
 package project
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil"
 )
 
-const deferredMessage = "projects not yet supported on this shithub host (see shithub-S47); subcommand registered for future use"
-
-const deferredExitCode = 2
-
-// exitFn is the indirection that lets tests substitute a non-fatal
-// "exit" recorder. Same pattern as pkg/cmd/release and pkg/cmd/gist.
-var exitFn = os.Exit
-
-func runDeferred(cmd *cobra.Command, _ []string) error {
-	fmt.Fprintf(cmd.ErrOrStderr(), "%s: %s\n", cmd.CommandPath(), deferredMessage)
-	exitFn(deferredExitCode)
-	return nil
-}
-
 // NewCmd builds the `project` parent and attaches the planned
-// subcommands as stubs.
+// subcommands as stubs. H4 migration onto shared cmdutil.NewDeferredCmd.
 func NewCmd(_ *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "project <command>",
@@ -50,42 +33,37 @@ discoverable, but the underlying shithub project model (S47) is parked
 and the transport choice (REST vs GraphQL) is undecided. Every
 invocation exits 2 with a friendly notice until S47 lands.`,
 	}
+	stub := func(name, short string) *cobra.Command {
+		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
+			Use: name, Short: short,
+			Name: "shithub project " + name, Track: "shithub-S47",
+		})
+	}
 	// Direct verbs (9).
-	cmd.AddCommand(newStub("list", "List projects for a user or org (deferred)"))
-	cmd.AddCommand(newStub("view", "Show a project's details (deferred)"))
-	cmd.AddCommand(newStub("create", "Create a new project (deferred)"))
-	cmd.AddCommand(newStub("edit", "Edit a project's metadata (deferred)"))
-	cmd.AddCommand(newStub("close", "Close a project (deferred)"))
-	cmd.AddCommand(newStub("copy", "Copy a project (deferred)"))
-	cmd.AddCommand(newStub("delete", "Delete a project (deferred)"))
-	cmd.AddCommand(newStub("link", "Link a project to a repository (deferred)"))
-	cmd.AddCommand(newStub("unlink", "Unlink a project from a repository (deferred)"))
+	cmd.AddCommand(stub("list", "List projects for a user or org (deferred)"))
+	cmd.AddCommand(stub("view", "Show a project's details (deferred)"))
+	cmd.AddCommand(stub("create", "Create a new project (deferred)"))
+	cmd.AddCommand(stub("edit", "Edit a project's metadata (deferred)"))
+	cmd.AddCommand(stub("close", "Close a project (deferred)"))
+	cmd.AddCommand(stub("copy", "Copy a project (deferred)"))
+	cmd.AddCommand(stub("delete", "Delete a project (deferred)"))
+	cmd.AddCommand(stub("link", "Link a project to a repository (deferred)"))
+	cmd.AddCommand(stub("unlink", "Unlink a project from a repository (deferred)"))
 	// Item verbs (6, flat-hyphenated to match gh).
-	cmd.AddCommand(newStub("item-list", "List items in a project (deferred)"))
-	cmd.AddCommand(newStub("item-add", "Add an existing issue or PR to a project (deferred)"))
-	cmd.AddCommand(newStub("item-create", "Create a draft-note item in a project (deferred)"))
-	cmd.AddCommand(newStub("item-edit", "Edit a project item's field values (deferred)"))
-	cmd.AddCommand(newStub("item-archive", "Archive a project item (deferred)"))
-	cmd.AddCommand(newStub("item-delete", "Delete a project item (deferred)"))
+	cmd.AddCommand(stub("item-list", "List items in a project (deferred)"))
+	cmd.AddCommand(stub("item-add", "Add an existing issue or PR to a project (deferred)"))
+	cmd.AddCommand(stub("item-create", "Create a draft-note item in a project (deferred)"))
+	cmd.AddCommand(stub("item-edit", "Edit a project item's field values (deferred)"))
+	cmd.AddCommand(stub("item-archive", "Archive a project item (deferred)"))
+	cmd.AddCommand(stub("item-delete", "Delete a project item (deferred)"))
 	// Field verbs (3).
-	cmd.AddCommand(newStub("field-list", "List fields in a project (deferred)"))
-	cmd.AddCommand(newStub("field-create", "Create a new field in a project (deferred)"))
-	cmd.AddCommand(newStub("field-delete", "Delete a field from a project (deferred)"))
+	cmd.AddCommand(stub("field-list", "List fields in a project (deferred)"))
+	cmd.AddCommand(stub("field-create", "Create a new field in a project (deferred)"))
+	cmd.AddCommand(stub("field-delete", "Delete a field from a project (deferred)"))
 	// Template verbs (1). The C21 spec spells this `project template
 	// list`; we ship the flat `template-list` form so all stubs share
 	// the same depth, then revisit nesting when S47's template surface
 	// firms up (it may grow create/delete verbs).
-	cmd.AddCommand(newStub("template-list", "List project templates available to a user or org (deferred)"))
+	cmd.AddCommand(stub("template-list", "List project templates available to a user or org (deferred)"))
 	return cmd
-}
-
-// newStub builds one deferred subcommand. No flags here — flag-shape
-// compatibility isn't useful until the implementation lands, and the
-// REST-vs-GraphQL transport question may yet reshape some flags.
-func newStub(name, short string) *cobra.Command {
-	return &cobra.Command{
-		Use:   name,
-		Short: short,
-		RunE:  runDeferred,
-	}
 }
