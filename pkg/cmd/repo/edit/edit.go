@@ -188,6 +188,20 @@ func Run(ctx context.Context, opts *options) error {
 		if err != nil {
 			return err
 		}
+		// H28: warn when --remove-topic names a topic that wasn't on
+		// the repo. The mutation is idempotent (we just call
+		// ReplaceTopics with whatever's left), but a silent success
+		// hid the user's typo. Compare against `current` so the
+		// warning fires before we ship the update.
+		curSet := map[string]struct{}{}
+		for _, t := range current {
+			curSet[strings.ToLower(t)] = struct{}{}
+		}
+		for _, t := range opts.RemoveTopics {
+			if _, ok := curSet[strings.ToLower(t)]; !ok {
+				fmt.Fprintf(opts.IO.ErrOut, "note: topic %q was not present\n", t)
+			}
+		}
 		updated := mergeTopics(current, opts.AddTopics, opts.RemoveTopics)
 		if _, err := rc.ReplaceTopics(ctx, ref.Owner, ref.Name, updated); err != nil {
 			return err
