@@ -94,6 +94,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.FillFirst, "fill-first", false, "use only the first commit for title and body")
 	cmd.Flags().BoolVar(&opts.FillVerbose, "fill-verbose", false, "use full commit messages for body")
 	cmd.Flags().BoolVar(&opts.NoMaintainer, "no-maintainer-edit", false, "disable maintainer edits on this PR")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
