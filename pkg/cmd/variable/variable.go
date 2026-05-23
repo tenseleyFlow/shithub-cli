@@ -18,6 +18,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "variable <command>",
 		Short: "Manage GitHub-Actions-style variables",
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(variablelist.NewCmd(f))
 	cmd.AddCommand(variableget.NewCmd(f))
