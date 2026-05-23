@@ -40,10 +40,15 @@ func init() {
 }
 
 func printVersion(out io.Writer, asJSON bool) error {
+	// I1: prefer ldflags values (set by Make/goreleaser) and fall back
+	// to runtime/debug.ReadBuildInfo() for go-install builds. Pre-fix
+	// `go install ...@vX.Y.Z` reported "shithub dev (unknown) built
+	// unknown" — now it recovers the module version + VCS metadata.
+	version, commit, date := build.Resolved()
 	info := versionInfo{
-		Version:   build.Version,
-		Commit:    build.Commit,
-		Date:      build.Date,
+		Version:   version,
+		Commit:    commit,
+		Date:      date,
 		GoVersion: runtime.Version(),
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,

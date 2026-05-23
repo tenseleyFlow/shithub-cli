@@ -1,0 +1,54 @@
+name: release
+
+# I1: tag-push wires goreleaser. Pre-fix cutting a tag did nothing
+# in CI — the maintainer had to run goreleaser locally, which (a) was
+# never documented and (b) produces artifacts with whatever toolchain
+# happened to be on the maintainer's box. Pin Go + goreleaser
+# versions explicitly so every release is reproducible.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # required for the GitHub release upload
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false   # never cancel a release-in-flight
+
+jobs:
+  goreleaser:
+    name: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # goreleaser needs the full history to compute the changelog
+          # and derive the previous-tag delta. Shallow clones break it.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          check-latest: true
+
+      - name: Verify the tag's binary reports its version
+        # Smoke test before invoking goreleaser: the ldflags chain in
+        # .goreleaser.yml stamps Version from {{ .Version }}. If
+        # `make build` here reports something else, goreleaser will
+        # too — fail fast before publishing artifacts that lie.
+        run: |
+          make build
+          ./bin/shithub --version
+
+      - name: Run goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'   # tracks v2 patch releases; v3 needs a bump here + .goreleaser.yml
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
