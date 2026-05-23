@@ -78,6 +78,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.EditLast, "edit-last", false, "edit the caller's most-recent comment on this PR")
 	cmd.Flags().BoolVar(&opts.CreateIfNone, "create-if-none", false, "with --edit-last, create a new comment when no prior comment exists")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the PR in a browser to comment")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
