@@ -15,22 +15,24 @@ import (
 
 func TestStatusRendersThreeSections(t *testing.T) {
 	tf := cmdutiltest.New(t)
-	tf.Server.Handle(http.MethodGet, "/api/v1/issues", func(w http.ResponseWriter, r *http.Request) {
+	// F29: refactor onto /search/issues qualifier-based routing.
+	// `mentioned` is deferred (no FTS mention index); the dashboard
+	// still renders the section header with no rows.
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Query().Get("filter") {
-		case "mentioned":
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
-				{Number: 7, Title: "mention me", Repository: &issues.RepoRef{FullName: "x/y"}},
-			})
-		case "created":
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
+		q := r.URL.Query().Get("q")
+		var items []issues.Issue
+		switch {
+		case strings.Contains(q, "author:@me"):
+			items = []issues.Issue{
 				{Number: 8, Title: "wrote this", Repository: &issues.RepoRef{FullName: "x/y"}},
-			})
-		default:
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
+			}
+		case strings.Contains(q, "assignee:@me"):
+			items = []issues.Issue{
 				{Number: 1, Title: "assigned to me", Repository: &issues.RepoRef{FullName: "o/r"}},
-			})
+			}
 		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 	})
 
 	opts := &options{
@@ -44,10 +46,8 @@ func TestStatusRendersThreeSections(t *testing.T) {
 	out := tf.Out.String()
 	for _, want := range []string{
 		"Issues assigned to you",
-		"Issues mentioning you",
 		"Issues opened by you",
 		"assigned to me",
-		"mention me",
 		"wrote this",
 	} {
 		if !strings.Contains(out, want) {
@@ -58,9 +58,9 @@ func TestStatusRendersThreeSections(t *testing.T) {
 
 func TestStatusJSONShape(t *testing.T) {
 	tf := cmdutiltest.New(t)
-	tf.Server.Handle(http.MethodGet, "/api/v1/issues", func(w http.ResponseWriter, _ *http.Request) {
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]issues.Issue{})
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []issues.Issue{}})
 	})
 
 	opts := &options{

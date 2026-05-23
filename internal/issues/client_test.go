@@ -153,20 +153,46 @@ func TestListAppliesFilters(t *testing.T) {
 	}
 }
 
+// TestListAcrossReposScopes pins F29: ListAcrossRepos now translates
+// the gh-style scope set onto /search/issues qualifiers. The legacy
+// `/issues?filter=...` endpoint doesn't exist on shithub yet, and the
+// audit endorsed the search-based path until it ships.
 func TestListAcrossReposScopes(t *testing.T) {
 	srv := fakeapi.New(t)
 	var seenQuery string
-	srv.Handle(http.MethodGet, "/api/v1/issues", func(w http.ResponseWriter, r *http.Request) {
+	srv.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, r *http.Request) {
 		seenQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]Issue{{Number: 1}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []Issue{{Number: 1}}})
 	})
 	c := NewClient(srv.NewClient())
-	if _, err := c.ListAcrossRepos(context.Background(), "mentioned", ListOptions{State: "open"}); err != nil {
-		t.Fatalf("ListAcrossRepos: %v", err)
+
+	// `created` → author:@me qualifier
+	if _, err := c.ListAcrossRepos(context.Background(), "created", ListOptions{State: "open"}); err != nil {
+		t.Fatalf("ListAcrossRepos created: %v", err)
 	}
-	if !strings.Contains(seenQuery, "filter=mentioned") || !strings.Contains(seenQuery, "state=open") {
-		t.Errorf("query wrong: %s", seenQuery)
+	if !strings.Contains(seenQuery, "author%3A%40me") || !strings.Contains(seenQuery, "state%3Aopen") {
+		t.Errorf("created query wrong: %s", seenQuery)
+	}
+
+	// `assigned` → assignee:@me qualifier
+	if _, err := c.ListAcrossRepos(context.Background(), "assigned", ListOptions{State: "open"}); err != nil {
+		t.Fatalf("ListAcrossRepos assigned: %v", err)
+	}
+	if !strings.Contains(seenQuery, "assignee%3A%40me") {
+		t.Errorf("assigned query wrong: %s", seenQuery)
+	}
+
+	// `mentioned` is deferred — should not hit the server at all.
+	srv.Handle(http.MethodGet, "/api/v1/search/issues", func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("mentioned scope must not round-trip; it's deferred")
+	})
+	items, err := c.ListAcrossRepos(context.Background(), "mentioned", ListOptions{State: "open"})
+	if err != nil {
+		t.Fatalf("ListAcrossRepos mentioned: %v", err)
+	}
+	if len(items) != 0 {
+		t.Errorf("mentioned should return nil/empty; got %v", items)
 	}
 }
 
