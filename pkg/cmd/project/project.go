@@ -32,6 +32,9 @@ This command tree is registered today so the planned flag surface is
 discoverable, but the underlying shithub project model (S47) is parked
 and the transport choice (REST vs GraphQL) is undecided. Every
 invocation exits 2 with a friendly notice until S47 lands.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	stub := func(name, short string) *cobra.Command {
 		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
