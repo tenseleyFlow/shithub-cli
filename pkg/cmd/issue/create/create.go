@@ -92,6 +92,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Template, "template", "", "issue template name (server feature; ignored if unsupported)")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the new-issue form in a browser")
 	cmd.Flags().BoolVar(&opts.Editor, "editor", false, "compose body via $EDITOR even when --body is set")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
