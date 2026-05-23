@@ -28,6 +28,9 @@ Common subcommands:
   delete  delete a label
   clone   clone labels from another repository
 `,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(listCmd.NewCmd(f))
 	cmd.AddCommand(createCmd.NewCmd(f))
