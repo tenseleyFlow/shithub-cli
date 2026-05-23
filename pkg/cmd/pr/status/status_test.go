@@ -19,24 +19,25 @@ func prMarker() *struct{} { v := struct{}{}; return &v }
 
 func TestStatusFiltersToPRs(t *testing.T) {
 	tf := cmdutiltest.New(t)
-	tf.Server.Handle(http.MethodGet, "/api/v1/issues", func(w http.ResponseWriter, r *http.Request) {
+	// F29: ListAcrossRepos now routes via /search/issues, branching on
+	// the `q` qualifier (`author:@me` / `assignee:@me`). The mentioned
+	// scope is deferred — no FTS mention index yet — and returns nil
+	// without a round-trip.
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Query().Get("filter") {
-		case "mentioned":
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
-				{Number: 7, Title: "pr-mention", PullRequest: prMarker(), Repository: &issues.RepoRef{FullName: "x/y"}},
-				{Number: 8, Title: "issue-mention", Repository: &issues.RepoRef{FullName: "x/y"}},
-			})
-		case "created":
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
+		q := r.URL.Query().Get("q")
+		var items []issues.Issue
+		switch {
+		case strings.Contains(q, "author:@me"):
+			items = []issues.Issue{
 				{Number: 9, Title: "wrote-pr", PullRequest: prMarker(), Repository: &issues.RepoRef{FullName: "x/y"}},
-			})
-		default:
-			// "assigned" filter (review-requested stand-in)
-			_ = json.NewEncoder(w).Encode([]issues.Issue{
+			}
+		case strings.Contains(q, "assignee:@me"):
+			items = []issues.Issue{
 				{Number: 10, Title: "rev-req-pr", PullRequest: prMarker(), Repository: &issues.RepoRef{FullName: "x/y"}},
-			})
+			}
 		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 	})
 
 	opts := &options{
@@ -48,21 +49,18 @@ func TestStatusFiltersToPRs(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	out := tf.Out.String()
-	for _, want := range []string{"Created by you", "Mentioning you", "Requesting a code review", "pr-mention", "wrote-pr", "rev-req-pr"} {
+	for _, want := range []string{"Created by you", "Requesting a code review", "wrote-pr", "rev-req-pr"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
-	}
-	if strings.Contains(out, "issue-mention") {
-		t.Errorf("pure issue should not appear in PR dashboard: %s", out)
 	}
 }
 
 func TestStatusJSON(t *testing.T) {
 	tf := cmdutiltest.New(t)
-	tf.Server.Handle(http.MethodGet, "/api/v1/issues", func(w http.ResponseWriter, _ *http.Request) {
+	tf.Server.Handle(http.MethodGet, "/api/v1/search/issues", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode([]issues.Issue{})
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []issues.Issue{}})
 	})
 
 	opts := &options{
