@@ -34,6 +34,9 @@ the supply-chain story lands server-side (placeholder spec: S54).
 
 Building attestations is intentionally out of scope for the CLI —
 provenance generation belongs in the CI runner / Actions workflow.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	stub := func(name, short string) *cobra.Command {
 		return cmdutil.NewDeferredCmd(cmdutil.DeferredSpec{
