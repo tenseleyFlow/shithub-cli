@@ -305,10 +305,3 @@ func encodeListQuery(o ListOptions) string {
 	v.Set("per_page", strconv.Itoa(perPage))
 	return v.Encode()
 }
-
-func appendQuery(existing, kv string) string {
-	if existing == "" {
-		return kv
-	}
-	return existing + "&" + kv
-}
