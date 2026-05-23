@@ -95,6 +95,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.Body, "body", "b", "", "merge commit body")
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "read merge commit body from file (use '-' for stdin)")
 	cmd.Flags().BoolVar(&opts.InsertPRBody, "insert-body-into-commit", false, "use the PR body as the merge commit body")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

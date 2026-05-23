@@ -93,6 +93,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringSliceVar(&opts.RemoveAssignees, "remove-assignee", nil, "remove assignee (repeatable, @me supported)")
 	cmd.Flags().IntVarP(&opts.Milestone, "milestone", "m", 0, "set milestone number")
 	cmd.Flags().BoolVar(&opts.RemoveMilestone, "remove-milestone", false, "clear the issue's milestone")
+	// H16: refuse --body alongside --body-file. See pr/edit for the
+	// full rationale — pre-fix the file silently won.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

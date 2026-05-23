@@ -88,6 +88,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVarP(&opts.BodyFile, "body-file", "F", "", "read review body from file (use '-' for stdin)")
 	cmd.Flags().BoolVar(&opts.Editor, "editor", false, "compose body via $EDITOR")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the PR review form in a browser")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
