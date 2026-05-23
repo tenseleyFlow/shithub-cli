@@ -107,6 +107,11 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringSliceVar(&opts.RemoveReviewers, "remove-reviewer", nil, "remove review request (repeatable, CSV)")
 	cmd.Flags().IntVarP(&opts.Milestone, "milestone", "m", 0, "set milestone number")
 	cmd.Flags().BoolVar(&opts.RemoveMilestone, "remove-milestone", false, "clear milestone")
+	// H16: --body and --body-file are two sources of truth for the
+	// same field. Pre-fix the file silently won and any --body content
+	// was discarded — gh refuses the combination at parse. cobra's
+	// MarkFlagsMutuallyExclusive does the same here.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 

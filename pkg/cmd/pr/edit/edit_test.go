@@ -161,3 +161,19 @@ func TestEditAssigneesAtMeExpansion(t *testing.T) {
 		t.Errorf("assignees expansion: %v", a)
 	}
 }
+
+// TestEditRejectsBodyPlusBodyFile pins H16: pre-fix passing both
+// --body and --body-file silently used the file and discarded the
+// inline value. cobra's MarkFlagsMutuallyExclusive now refuses the
+// combination at parse.
+func TestEditRejectsBodyPlusBodyFile(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	cmd := NewCmd(tf.Factory)
+	cmd.SetArgs([]string{"1", "--repo", "o/r", "--body", "inline", "--body-file", "/tmp/x"})
+	cmd.SetOut(tf.Out)
+	cmd.SetErr(tf.ErrOut)
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error from mutex, got nil")
+	}
+}
