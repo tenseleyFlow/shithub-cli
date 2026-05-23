@@ -59,7 +59,7 @@ func Resolved() (version, commit, date string) {
 }
 
 var (
-	resolveOnce                                          sync.Once
+	resolveOnce                                   sync.Once
 	resolvedVersion, resolvedCommit, resolvedDate string
 )
 
