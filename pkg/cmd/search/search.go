@@ -28,6 +28,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 
 Use the appropriate subcommand to disambiguate; bare-query search
 matches gh's behavior and refuses to guess.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(searchrepos.NewCmd(f, browser.Open))
 	cmd.AddCommand(searchissues.NewCmd(f, browser.Open))

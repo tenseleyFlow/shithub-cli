@@ -31,6 +31,9 @@ Recognized keys:
 
 Per-host keys (passed with --host) currently cover only git_protocol;
 everything else is global.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(newGetCmd(f))
 	cmd.AddCommand(newSetCmd(f))

@@ -38,6 +38,11 @@ type Options struct {
 	// Method, when empty, defaults to GET — or POST when any body source
 	// is present (-F/-f/--input).
 	Method string
+	// MethodSet distinguishes "user didn't pass -X" (default-GET path)
+	// from "user passed -X with an empty value" (typo). Populated from
+	// `c.Flags().Changed("method")` in RunE. I36: pre-fix `api -X ""`
+	// silently defaulted to GET — hide-the-typo behavior.
+	MethodSet bool
 
 	// Headers gathered from -H. Repeatable.
 	RawHeaders []string
@@ -118,6 +123,7 @@ array bodies; --slurp wraps pages in an outer array.`,
   shithub api repos/{owner}/{repo}/issues --paginate -q '.[].number' -R mf/cli`,
 		RunE: func(c *cobra.Command, args []string) error {
 			opts.Endpoint = args[0]
+			opts.MethodSet = c.Flags().Changed("method")
 			return Run(c.Context(), opts)
 		},
 	}
@@ -233,6 +239,12 @@ func validate(opts *Options) error {
 	// drop the scheme or fix the typo.
 	if strings.HasPrefix(strings.ToLower(opts.Endpoint), "http://") {
 		return errors.New("api: refusing plain http:// URL — switch to https:// (the bearer token would otherwise be sent over plaintext before the server's redirect)")
+	}
+	// I36: `-X ""` (explicit empty value) is a typo, not a request to
+	// silently default to GET. Distinguish from "user didn't pass -X"
+	// via MethodSet so the default-GET path stays untouched.
+	if opts.MethodSet && strings.TrimSpace(opts.Method) == "" {
+		return errors.New("api: -X requires a value (e.g. -X GET, -X POST)")
 	}
 	// H18: HTTP methods are case-sensitive per RFC 9110, but every
 	// well-known client uppercases by convention. Pre-fix, `api -X get`

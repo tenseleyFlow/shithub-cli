@@ -25,6 +25,9 @@ Bulk import:      shithub alias import aliases.yml [--clobber]
 
 Aliases never shadow built-in commands; the dispatcher always prefers
 the built-in if both exist.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(newSetCmd(f))
 	cmd.AddCommand(newListCmd(f))

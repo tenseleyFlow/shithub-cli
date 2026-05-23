@@ -17,6 +17,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gpg-key <command>",
 		Short: "Manage your shithub GPG public keys",
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(gpgkeyadd.NewCmd(f))
 	cmd.AddCommand(gpgkeylist.NewCmd(f))

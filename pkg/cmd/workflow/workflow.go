@@ -21,6 +21,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "workflow <command>",
 		Short: "Inspect and trigger GitHub-Actions-style workflows",
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(workflowlist.NewCmd(f))
 	cmd.AddCommand(workflowview.NewCmd(f))

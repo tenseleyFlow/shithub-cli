@@ -20,6 +20,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ssh-key <command>",
 		Short: "Manage your shithub SSH public keys",
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(sshkeyadd.NewCmd(f))
 	cmd.AddCommand(sshkeylist.NewCmd(f))

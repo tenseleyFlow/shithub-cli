@@ -30,6 +30,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 Once installed, an extension named shithub-foo is invoked as ` + "`shithub foo`" + ` —
 the host CLI looks up unknown verbs against ${SHITHUB_CONFIG_DIR}/extensions/
 and execs the matching binary with arguments passed through.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(extlist.NewCmd(f))
 	cmd.AddCommand(extinstall.NewCmd(f))

@@ -17,6 +17,17 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "secret <command>",
 		Short: "Manage GitHub-Actions-style secrets",
+		// I27 (discoverability half): secrets are write-only by design
+		// (matches gh). `secret get` doesn't exist; users should use
+		// `secret list` to enumerate names + `secret set` to rotate.
+		Long: `Manage repository, organization, and environment secrets.
+
+Secrets are write-only — there's no read endpoint exposing the cleartext
+value. Use 'secret list' to enumerate names, 'secret set' to add or
+rotate, and 'secret delete' to remove.`,
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(secretlist.NewCmd(f))
 	cmd.AddCommand(secretset.NewCmd(f))

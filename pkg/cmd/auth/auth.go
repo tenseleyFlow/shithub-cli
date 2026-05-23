@@ -33,6 +33,13 @@ The minimum to do anything authenticated is:
 Tokens are stored in the system keyring by default. Pass --insecure-storage
 to keep them in ~/.config/shithub/hosts.yml (0600) instead — for example on
 a headless server with no secret-service daemon.`,
+		// I4 (I3 bundle): unknown subcommand must exit non-zero.
+		// Without ParentRunE, `shithub auth zzzz` printed help and
+		// exited 0 — CI scripts grepping on exit code missed real
+		// errors. The helper preserves bare-invocation (`shithub
+		// auth`) showing help.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(login.NewCmd(f))
 	cmd.AddCommand(logout.NewCmd(f))
