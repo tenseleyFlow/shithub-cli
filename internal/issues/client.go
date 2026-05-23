@@ -157,27 +157,93 @@ func (c *Client) List(ctx context.Context, owner, repo string, opts ListOptions)
 	return c.paginate(ctx, path, opts.Limit, api.WithOwner(owner), api.WithRepo(repo))
 }
 
-// ListAcrossRepos hits the user-scoped /issues endpoints (assigned,
-// authored, mentioned). The filter set is opaque to this call; we pass
-// it through verbatim because the server semantics differ from the
-// per-repo endpoint and the caller is the right place to know.
+// ListAcrossRepos returns the user-scoped issue set used by
+// `pr status` / `issue status` dashboards. F29: pre-fix this called
+// the (unimplemented) `/api/v1/issues` endpoint and 404'd on every
+// invocation. We translate to `/search/issues` qualifiers — the
+// search endpoint already supports `author:@me` / `assignee:@me`
+// scoping and is what gh's own dashboards use under the hood. The
+// `mentioned` scope is degraded to an empty result for now: shithub
+// has no mention index, and there's no FTS-safe qualifier to express
+// "issues that contain @<login> in body/comments" yet. The audit
+// explicitly endorses this CLI-side path until a dedicated endpoint
+// ships.
+//
+// Result shape is unchanged — IssueItem is a type alias for Issue.
 func (c *Client) ListAcrossRepos(ctx context.Context, scope string, opts ListOptions) ([]Issue, error) {
-	q := encodeListQuery(opts)
-	if scope != "" {
-		switch scope {
-		case "assigned":
-			// /issues (the user's assigned)
-		case "created":
-			q = appendQuery(q, "filter=created")
-		case "mentioned":
-			q = appendQuery(q, "filter=mentioned")
+	if scope == "mentioned" {
+		// Deferred: shithub doesn't index mentions yet. Returning
+		// nil keeps the dashboard renderable; callers print an empty
+		// section header instead of erroring.
+		return nil, nil
+	}
+	var qual string
+	switch scope {
+	case "assigned":
+		qual = "assignee:@me"
+	case "created":
+		qual = "author:@me"
+	default:
+		// Empty scope = no qualifier; equivalent to listing everything
+		// visible to the user. Match the previous endpoint's behavior.
+	}
+	v := url.Values{}
+	v.Set("q", buildSearchQuery(qual, opts))
+	v.Set("per_page", strconv.Itoa(perPageOrDefault(opts.PerPage)))
+	path := "/search/issues?" + v.Encode()
+	return c.paginateSearch(ctx, path, opts.Limit)
+}
+
+// buildSearchQuery composes the `q` parameter for /search/issues.
+// Combines the scope qualifier (`author:@me` / `assignee:@me`) with
+// state and any caller-supplied filters that map cleanly to gh's
+// search query language.
+func buildSearchQuery(qualifier string, opts ListOptions) string {
+	parts := []string{}
+	if qualifier != "" {
+		parts = append(parts, qualifier)
+	}
+	if opts.State != "" && opts.State != "all" {
+		parts = append(parts, "state:"+opts.State)
+	}
+	for _, l := range opts.Labels {
+		parts = append(parts, "label:"+l)
+	}
+	return strings.Join(parts, " ")
+}
+
+func perPageOrDefault(n int) int {
+	if n <= 0 {
+		return 100
+	}
+	if n > 100 {
+		return 100
+	}
+	return n
+}
+
+// paginateSearch walks /search/issues pages, extracting the items
+// array per response. The endpoint returns the gh-canonical envelope
+// `{total_count, incomplete_results, items: [...]}`, so we decode that
+// shape and accumulate items.
+func (c *Client) paginateSearch(ctx context.Context, path string, limit int) ([]Issue, error) {
+	var out []Issue
+	for raw, err := range c.api.DoPaginated(ctx, http.MethodGet, path) {
+		if err != nil {
+			return nil, err
+		}
+		var page struct {
+			Items []Issue `json:"items"`
+		}
+		if err := json.Unmarshal(raw, &page); err != nil {
+			return nil, fmt.Errorf("issues: decode search page: %w", err)
+		}
+		out = append(out, page.Items...)
+		if limit > 0 && len(out) >= limit {
+			return out[:limit], nil
 		}
 	}
-	path := "/issues"
-	if q != "" {
-		path += "?" + q
-	}
-	return c.paginate(ctx, path, opts.Limit)
+	return out, nil
 }
 
 func (c *Client) paginate(ctx context.Context, path string, limit int, opts ...api.RequestOption) ([]Issue, error) {
