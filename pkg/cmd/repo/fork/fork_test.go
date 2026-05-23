@@ -141,6 +141,31 @@ func TestForkRejectsOwnRepo(t *testing.T) {
 	}
 }
 
+// TestForkRejectsOrgEqualsSourceOwner pins F42: pre-fix the server
+// returned a confusing 409 ("forking your own repo requires a
+// different name") when --org named the source owner. Refuse locally
+// before any round-trip.
+func TestForkRejectsOrgEqualsSourceOwner(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		GitProtocol: tf.Factory.GitProtocol,
+		RepoArg:     "octo/hello",
+		Org:         "octo", // same as source owner
+		RemoteName:  "origin",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error when --org matches source owner")
+	}
+	if !strings.Contains(err.Error(), "source owner") {
+		t.Errorf("error should name self-target case: %v", err)
+	}
+}
+
 // TestForkOwnRepoIntoOrgAllowed: --org bypasses the own-repo guard,
 // since forking your own repo into a different org is a real workflow.
 func TestForkOwnRepoIntoOrgAllowed(t *testing.T) {

@@ -127,6 +127,14 @@ func Run(ctx context.Context, opts *options) error {
 			return fmt.Errorf("repo fork: cannot fork your own repository (%s/%s); use --org to fork into an organization", ref.Owner, ref.Name)
 		}
 	}
+	// F42: when --org names the source owner, the server returns a
+	// 409 with a confusing "forking your own repo requires a different
+	// name" message. Refuse the redundant target locally so the user
+	// notices the typo (likely a copy-paste from the source slug) before
+	// any round-trip.
+	if opts.Org != "" && strings.EqualFold(opts.Org, ref.Owner) {
+		return fmt.Errorf("repo fork: --org %q is the source owner; pass --org <other> to fork into a different account", opts.Org)
+	}
 
 	in := repos.ForkInput{
 		Organization:      opts.Org,
