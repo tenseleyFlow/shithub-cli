@@ -75,6 +75,8 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.Editor, "editor", false, "compose body via $EDITOR")
 	cmd.Flags().BoolVar(&opts.EditLast, "edit-last", false, "edit the caller's most-recent comment on this issue")
 	cmd.Flags().BoolVarP(&opts.Web, "web", "w", false, "open the issue in a browser to comment")
+	// H16: refuse --body alongside --body-file.
+	cmd.MarkFlagsMutuallyExclusive("body", "body-file")
 	return cmd
 }
 
