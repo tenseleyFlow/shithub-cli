@@ -22,6 +22,9 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run <command>",
 		Short: "Inspect workflow runs and their artifacts",
+		// I3: reject unknown subcommands; preserve help on bare invoke.
+		Args: cobra.ArbitraryArgs,
+		RunE: cmdutil.ParentRunE(),
 	}
 	cmd.AddCommand(runlist.NewCmd(f))
 	cmd.AddCommand(runview.NewCmd(f))
