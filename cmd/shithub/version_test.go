@@ -14,6 +14,9 @@ import (
 
 // TestPrintVersionHuman locks the human-readable format that release
 // notes and shell scripts may parse. Format is "shithub <ver> (<sha>) built <date>".
+// I1: printVersion now sources via build.Resolved() so go-install builds
+// recover VCS metadata from runtime/debug.ReadBuildInfo(); assert against
+// Resolved() instead of the bare ldflags vars.
 func TestPrintVersionHuman(t *testing.T) {
 	t.Parallel()
 
@@ -22,8 +25,9 @@ func TestPrintVersionHuman(t *testing.T) {
 		t.Fatalf("printVersion: %v", err)
 	}
 
+	version, commit, date := build.Resolved()
 	got := buf.String()
-	want := "shithub " + build.Version + " (" + build.Commit + ") built " + build.Date + "\n"
+	want := "shithub " + version + " (" + commit + ") built " + date + "\n"
 	if got != want {
 		t.Fatalf("human output mismatch\nwant: %q\ngot:  %q", want, got)
 	}
@@ -44,14 +48,15 @@ func TestPrintVersionJSON(t *testing.T) {
 		t.Fatalf("json decode: %v\nraw: %s", err, buf.String())
 	}
 
-	if info.Version != build.Version {
-		t.Errorf("Version: want %q got %q", build.Version, info.Version)
+	wantVersion, wantCommit, wantDate := build.Resolved()
+	if info.Version != wantVersion {
+		t.Errorf("Version: want %q got %q", wantVersion, info.Version)
 	}
-	if info.Commit != build.Commit {
-		t.Errorf("Commit: want %q got %q", build.Commit, info.Commit)
+	if info.Commit != wantCommit {
+		t.Errorf("Commit: want %q got %q", wantCommit, info.Commit)
 	}
-	if info.Date != build.Date {
-		t.Errorf("Date: want %q got %q", build.Date, info.Date)
+	if info.Date != wantDate {
+		t.Errorf("Date: want %q got %q", wantDate, info.Date)
 	}
 	if info.GoVersion != runtime.Version() {
 		t.Errorf("GoVersion: want %q got %q", runtime.Version(), info.GoVersion)
