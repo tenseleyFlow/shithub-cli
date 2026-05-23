@@ -68,7 +68,7 @@ func resolveBuildInfo() (version, commit, date string) {
 
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
-		return
+		return version, commit, date
 	}
 
 	// Module version: when installed via `go install ...@v1.2.3`,
@@ -96,5 +96,5 @@ func resolveBuildInfo() (version, commit, date string) {
 			}
 		}
 	}
-	return
+	return version, commit, date
 }
