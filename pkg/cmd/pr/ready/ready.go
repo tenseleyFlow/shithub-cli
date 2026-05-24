@@ -98,9 +98,11 @@ func Run(ctx context.Context, opts *options) error {
 
 	// H2: cross-namespace verb routing — if the number is actually an
 	// issue, surface a friendly redirect rather than "pull request not
-	// found".
+	// found". audit-I6: `pr ready` is PR-only, so flag the redirect as
+	// asymmetric so the message explains the constraint instead of
+	// pointing at `issue ready` (which doesn't exist).
 	ic := issues.NewClient(client)
-	if err := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr ready", "ready"); err != nil {
+	if err := crosskind.CheckAsymmetric(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr ready", "ready", true); err != nil {
 		return err
 	}
 
