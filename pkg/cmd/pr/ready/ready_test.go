@@ -148,7 +148,16 @@ func TestReadyWrongNamespaceRedirects(t *testing.T) {
 	if !strings.Contains(err.Error(), "is an issue") {
 		t.Errorf("error should redirect: %v", err)
 	}
-	if !strings.Contains(err.Error(), "shithub issue ready 5") {
-		t.Errorf("error should suggest issue ready: %v", err)
+	// audit-I6: `pr ready` is asymmetric — error must NOT point at
+	// `issue ready` (which doesn't exist) and SHOULD point at the
+	// `issue view` inspection path.
+	if strings.Contains(err.Error(), "shithub issue ready") {
+		t.Errorf("must NOT suggest non-existent `issue ready`: %v", err)
+	}
+	if !strings.Contains(err.Error(), "only applies to pull requests") {
+		t.Errorf("expected asymmetry explanation: %v", err)
+	}
+	if !strings.Contains(err.Error(), "shithub issue view 5") {
+		t.Errorf("expected view-redirect fallback: %v", err)
 	}
 }

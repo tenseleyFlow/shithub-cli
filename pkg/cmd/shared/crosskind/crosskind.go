@@ -38,6 +38,14 @@ type ErrWrongNamespace struct {
 	// SuggestedVerb is the command tail to suggest (e.g. "close",
 	// "ready"). Defaults to the verb portion of CmdName when empty.
 	SuggestedVerb string
+	// Asymmetric marks verbs that exist on only one side of the
+	// namespace (e.g. `pr ready`, `pr merge`, `pr review`). When
+	// true, the formatted message explains the constraint instead
+	// of pointing at an `issue <verb>` that doesn't exist.
+	// audit-I6: pre-fix `pr ready 1` on an issue suggested
+	// `try shithub issue ready 1` — but `issue ready` doesn't
+	// exist, so the user chased a dead command.
+	Asymmetric bool
 }
 
 // errWrongNamespaceSentinel is the marker for errors.Is matching;
@@ -56,8 +64,32 @@ func (e *ErrWrongNamespace) Error() string {
 	} else {
 		kindNoun = "pull request"
 	}
+	// audit-I6: asymmetric verbs (e.g. `pr ready`, `pr merge`,
+	// `pr review`) don't exist on the other side of the namespace.
+	// Pre-fix we still emitted "try `shithub issue ready N`" — a
+	// dead command. Now we explain the asymmetry and steer the
+	// user at `view` (which exists everywhere) for inspection.
+	if e.Asymmetric {
+		return fmt.Sprintf("%s: #%d is %s %s; `%s` only applies to %ss (run `shithub %s view %d` to inspect)",
+			e.CmdName, e.Number, articleFor(kindNoun), kindNoun,
+			e.CmdName, asymmetricSubjectFor(e.CmdName), tree, e.Number)
+	}
 	return fmt.Sprintf("%s: #%d is %s %s; try `shithub %s %s %d`",
 		e.CmdName, e.Number, articleFor(kindNoun), kindNoun, tree, suggested, e.Number)
+}
+
+// asymmetricSubjectFor returns the noun-form ("pull request" or
+// "issue") the asymmetric verb operates on, derived from the
+// command prefix in CmdName. Used by Error() to render messages
+// like "`pr ready` only applies to pull requests".
+func asymmetricSubjectFor(cmdName string) string {
+	switch {
+	case len(cmdName) >= 3 && cmdName[:3] == "pr ":
+		return "pull request"
+	case len(cmdName) >= 6 && cmdName[:6] == "issue ":
+		return "issue"
+	}
+	return "the calling kind"
 }
 
 // Is supports errors.Is matching against the sentinel — callers that
@@ -94,6 +126,16 @@ func articleFor(noun string) string {
 // and runs only on the wrong-side path because the expected-side
 // lookup is what the mutation already needs to do.
 func Check(ctx context.Context, ic *issues.Client, pc *pulls.Client, owner, name string, number int, expectedKind, cmdName, suggestedVerb string) error {
+	return CheckAsymmetric(ctx, ic, pc, owner, name, number, expectedKind, cmdName, suggestedVerb, false)
+}
+
+// CheckAsymmetric is Check with an explicit `asymmetric` flag for
+// verbs that exist on only one side of the namespace (e.g.
+// `pr ready`, `pr merge`, `pr review`, `pr checkout`, `pr diff`,
+// `pr update-branch`). When asymmetric=true and the wrong-side
+// case fires, the error message explains the constraint instead
+// of pointing at an `issue <verb>` that doesn't exist. audit-I6.
+func CheckAsymmetric(ctx context.Context, ic *issues.Client, pc *pulls.Client, owner, name string, number int, expectedKind, cmdName, suggestedVerb string, asymmetric bool) error {
 	if number <= 0 {
 		return nil
 	}
@@ -109,6 +151,7 @@ func Check(ctx context.Context, ic *issues.Client, pc *pulls.Client, owner, name
 			return &ErrWrongNamespace{
 				Number: number, CmdName: cmdName,
 				Found: "pr", SuggestedVerb: suggestedVerb,
+				Asymmetric: asymmetric,
 			}
 		}
 	case "pr":
@@ -119,6 +162,7 @@ func Check(ctx context.Context, ic *issues.Client, pc *pulls.Client, owner, name
 			return &ErrWrongNamespace{
 				Number: number, CmdName: cmdName,
 				Found: "issue", SuggestedVerb: suggestedVerb,
+				Asymmetric: asymmetric,
 			}
 		}
 	default:
