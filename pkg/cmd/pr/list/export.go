@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
+	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 )
 
 // exporter projects each PR onto the gh-compatible JSON shape.
@@ -29,6 +30,7 @@ var exportableFields = []string{
 	"closedAt",
 	"comments",
 	"createdAt",
+	"displayState",
 	"draft",
 	"headRefName",
 	"headRefOid",
@@ -79,14 +81,21 @@ func ProjectPR(p pulls.PR) map[string]any {
 		labels = append(labels, map[string]any{"name": l.Name, "color": l.Color})
 	}
 	return map[string]any{
-		"author":            author,
-		"baseRefName":       p.Base.Ref,
-		"baseRefOid":        p.Base.SHA,
-		"baseRepository":    repoLiteAsExport(p.Base.Repo),
-		"body":              p.Body,
-		"closedAt":          p.ClosedAt,
-		"comments":          p.Comments,
-		"createdAt":         p.CreatedAt,
+		"author":         author,
+		"baseRefName":    p.Base.Ref,
+		"baseRefOid":     p.Base.SHA,
+		"baseRepository": repoLiteAsExport(p.Base.Repo),
+		"body":           p.Body,
+		"closedAt":       p.ClosedAt,
+		"comments":       p.Comments,
+		"createdAt":      p.CreatedAt,
+		// audit-I39: human-formatter projection of the state machine.
+		// `state` stays gh-canonical ("open"/"closed"), `merged` is a
+		// separate boolean, and `displayState` is what `pr list` /
+		// `pr view` print in the table (merged > closed > draft > open).
+		// Scripts can pick either depending on whether they want raw
+		// state or display-equivalent.
+		"displayState":      prshared.DisplayState(&p),
 		"draft":             p.Draft,
 		"headRefName":       p.Head.Ref,
 		"headRefOid":        p.Head.SHA,
