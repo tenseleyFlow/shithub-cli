@@ -27,6 +27,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/prompter"
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	"github.com/tenseleyFlow/shithub-cli/internal/repos"
+	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
 	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
 )
@@ -170,9 +171,16 @@ func Run(ctx context.Context, opts *options) error {
 		opts.Body = composed
 	}
 
-	if strings.TrimSpace(opts.Title) == "" {
-		return errors.New("pr create: title is required (--title, --fill, or interactive)")
+	// audit-I52: reject newline/null titles before round-trip. --fill
+	// and --fill-first are exempt-by-construction (they project from
+	// the commit subject, which `git` never emits with embedded
+	// newlines), but pass them through the same gate so a future change
+	// to fill semantics can't reintroduce the bug.
+	clean, err := issueshared.ValidateTitle(opts.Title)
+	if err != nil {
+		return fmt.Errorf("pr create: %w", err)
 	}
+	opts.Title = clean
 
 	in := pulls.CreateInput{
 		Title: opts.Title,
