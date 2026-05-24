@@ -18,7 +18,12 @@ const (
 
 // SSHKey is one entry returned by /user/keys.
 type SSHKey struct {
-	ID          int64     `json:"id"`
+	ID int64 `json:"id"`
+	// NodeID is the opaque base64-encoded `gid://shithub/SSHKey/{id}`
+	// identifier (I7b audit-I25). gh-compat clients should prefer
+	// NodeID over the sequential integer ID; the integer is kept for
+	// one release cycle before the v0.2.0 strip.
+	NodeID      string    `json:"node_id,omitempty"`
 	Key         string    `json:"key"`
 	Title       string    `json:"title"`
 	Kind        string    `json:"kind,omitempty"` // "authentication" | "signing"
