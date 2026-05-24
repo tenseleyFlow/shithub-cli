@@ -125,3 +125,73 @@ func TestIsWrongNamespace(t *testing.T) {
 		t.Error("nil should not be detected")
 	}
 }
+
+// TestCheckAsymmetric_PRReadyOnIssue pins audit-I6: an asymmetric
+// PR-only verb on an issue number must NOT suggest the matching
+// `issue <verb>` command because it doesn't exist. The error
+// explains the asymmetry and steers at `issue view N` instead.
+func TestCheckAsymmetric_PRReadyOnIssue(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues/1", 200, issues.Issue{Number: 1})
+
+	client, _ := tf.Factory.HTTPClient("")
+	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	err := crosskind.CheckAsymmetric(context.Background(), ic, pc, "o", "r", 1, "pr", "pr ready", "ready", true)
+	var w *crosskind.ErrWrongNamespace
+	if !errors.As(err, &w) {
+		t.Fatalf("want ErrWrongNamespace, got %v", err)
+	}
+	if !w.Asymmetric {
+		t.Error("Asymmetric flag should be set")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "shithub issue ready 1") {
+		t.Errorf("must NOT point at non-existent `issue ready`: %q", msg)
+	}
+	if !strings.Contains(msg, "only applies to pull requests") {
+		t.Errorf("expected asymmetry explanation: %q", msg)
+	}
+	if !strings.Contains(msg, "shithub issue view 1") {
+		t.Errorf("expected view-redirect fallback: %q", msg)
+	}
+}
+
+// TestCheckAsymmetric_PRMergeOnIssue is the same shape for `pr merge`.
+func TestCheckAsymmetric_PRMergeOnIssue(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues/1", 200, issues.Issue{Number: 1})
+
+	client, _ := tf.Factory.HTTPClient("")
+	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	err := crosskind.CheckAsymmetric(context.Background(), ic, pc, "o", "r", 1, "pr", "pr merge", "merge", true)
+	if err == nil {
+		t.Fatal("expected ErrWrongNamespace")
+	}
+	if strings.Contains(err.Error(), "shithub issue merge") {
+		t.Errorf("must NOT point at non-existent `issue merge`: %v", err)
+	}
+}
+
+// TestCheck_StillSuggestsForSymmetricVerb confirms the symmetric path
+// (`pr close`, `pr edit`) keeps the existing "try `shithub issue X N`"
+// redirect — those verbs DO exist on the other side.
+func TestCheck_StillSuggestsForSymmetricVerb(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/issues/1", 200, issues.Issue{Number: 1})
+
+	client, _ := tf.Factory.HTTPClient("")
+	ic := issues.NewClient(client)
+	pc := pulls.NewClient(client)
+
+	err := crosskind.Check(context.Background(), ic, pc, "o", "r", 1, "pr", "pr close", "close")
+	if err == nil {
+		t.Fatal("expected ErrWrongNamespace")
+	}
+	if !strings.Contains(err.Error(), "shithub issue close 1") {
+		t.Errorf("symmetric verb should still redirect: %v", err)
+	}
+}
