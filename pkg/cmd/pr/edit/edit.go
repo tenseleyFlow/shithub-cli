@@ -179,7 +179,12 @@ func Run(ctx context.Context, opts *options) error {
 	// PR-scalar patch first (title/body/base).
 	patch := pulls.EditInput{}
 	if opts.titleSet {
-		t := opts.Title
+		// audit-I52: same gate as `pr create` so multi-line titles
+		// can't reach the server via the edit path.
+		t, err := issueshared.ValidateTitle(opts.Title)
+		if err != nil {
+			return fmt.Errorf("pr edit: %w", err)
+		}
 		patch.Title = &t
 	}
 	if opts.bodySet {
