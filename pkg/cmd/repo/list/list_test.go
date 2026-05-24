@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tenseleyFlow/shithub-cli/internal/api"
 	"github.com/tenseleyFlow/shithub-cli/internal/cmdutil/cmdutiltest"
 	"github.com/tenseleyFlow/shithub-cli/internal/repos"
 )
@@ -200,6 +201,70 @@ func TestListUserPositional(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	tf.Server.AssertCalled(http.MethodGet, "/api/v1/users/octo/repos")
+}
+
+// TestListFallsBackToOrgOn404 pins audit-I42: pre-fix `repo list <org>`
+// stopped at the /users/{X}/repos 404 with "user not found" even though
+// /orgs/{X}/repos was available. The owner could be either; try user
+// first, fall back to org when the user lookup 404s.
+func TestListFallsBackToOrgOn404(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/users/tenseleyflow/repos", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"user not found"}`))
+	})
+	tf.Server.Handle(http.MethodGet, "/api/v1/orgs/tenseleyflow/repos", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(sampleRepos())
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Owner:       "tenseleyflow",
+		Limit:       DefaultLimit,
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Both endpoints get probed: user first, then org as the fallback.
+	tf.Server.AssertCalled(http.MethodGet, "/api/v1/users/tenseleyflow/repos")
+	tf.Server.AssertCalled(http.MethodGet, "/api/v1/orgs/tenseleyflow/repos")
+	out := tf.IOStreams.Out.(interface{ String() string }).String()
+	if !strings.Contains(out, "u/alpha") {
+		t.Errorf("expected fallback to surface org repos, got: %s", out)
+	}
+}
+
+// TestListPropagatesUserNotFoundWhenOrgAlsoMisses pins the negative
+// case: when both /users/{X} and /orgs/{X} 404, the original user-side
+// error wins so the user sees "user not found" not "org not found".
+func TestListPropagatesUserNotFoundWhenOrgAlsoMisses(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	tf.Server.Handle(http.MethodGet, "/api/v1/users/ghost/repos", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"user not found"}`))
+	})
+	tf.Server.Handle(http.MethodGet, "/api/v1/orgs/ghost/repos", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"org not found"}`))
+	})
+
+	opts := &options{
+		IO:          tf.IOStreams,
+		HTTPClient:  tf.Factory.HTTPClient,
+		DefaultHost: tf.Factory.DefaultHost,
+		Owner:       "ghost",
+		Limit:       DefaultLimit,
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected NotFound error when both endpoints 404")
+	}
+	if !api.IsNotFoundError(err) {
+		t.Errorf("expected NotFoundError to propagate; got: %v", err)
+	}
 }
 
 func TestApplyLimit(t *testing.T) {

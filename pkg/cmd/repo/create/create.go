@@ -2,7 +2,7 @@
 
 // Package create implements `shithub repo create`. Two modes:
 //
-//   - Flag-driven (any of --public/--private/--internal supplied): build a
+//   - Flag-driven (--public or --private supplied): build a
 //     CreateInput from flags and POST; optionally clone or wire --source.
 //   - Interactive (TTY only, no visibility flag): prompt the user through
 //     name, description, visibility, then ask whether to clone.
@@ -43,7 +43,6 @@ type options struct {
 	Homepage    string
 	Public      bool
 	Private     bool
-	Internal    bool
 	License     string
 	Gitignore   string
 	AddReadme   bool
@@ -89,7 +88,11 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.Homepage, "homepage", "", "URL associated with the repository")
 	cmd.Flags().BoolVar(&opts.Public, "public", false, "make the new repository public")
 	cmd.Flags().BoolVar(&opts.Private, "private", false, "make the new repository private")
-	cmd.Flags().BoolVar(&opts.Internal, "internal", false, "make the new repository internal (org-only)")
+	// I51 (audit): `--internal` removed — the server doesn't implement
+	// gh's "internal" visibility (org-member-only). Pre-fix the flag
+	// was advertised in help + accepted at parse, then the server 422'd
+	// with "visibility must be one of public, private". Reintroduce
+	// once shithub server supports internal-visibility semantics.
 	cmd.Flags().StringVarP(&opts.License, "license", "l", "", "specify an Open Source License")
 	cmd.Flags().StringVarP(&opts.Gitignore, "gitignore", "g", "", "specify a gitignore template")
 	cmd.Flags().BoolVar(&opts.AddReadme, "add-readme", false, "add a README file to the new repository")
@@ -125,7 +128,7 @@ func Run(ctx context.Context, opts *options) error {
 
 	// Interactive mode kicks in only when (a) no visibility flag set,
 	// (b) we have a TTY, and (c) the user didn't pass --source/--template.
-	interactive := !opts.Public && !opts.Private && !opts.Internal && opts.IO.IsStdoutTTY() && opts.Source == "" && opts.Template == ""
+	interactive := !opts.Public && !opts.Private && opts.IO.IsStdoutTTY() && opts.Source == "" && opts.Template == ""
 	if interactive {
 		if err := promptForFlags(opts, &name); err != nil {
 			return err
@@ -173,14 +176,8 @@ func Run(ctx context.Context, opts *options) error {
 
 // validateFlags enforces the visibility mutex and other flag combos.
 func validateFlags(opts *options) error {
-	count := 0
-	for _, b := range []bool{opts.Public, opts.Private, opts.Internal} {
-		if b {
-			count++
-		}
-	}
-	if count > 1 {
-		return fmt.Errorf("repo create: --public, --private, and --internal are mutually exclusive")
+	if opts.Public && opts.Private {
+		return fmt.Errorf("repo create: --public and --private are mutually exclusive")
 	}
 	if opts.Source != "" && opts.Clone {
 		return fmt.Errorf("repo create: --source and --clone are mutually exclusive")
@@ -229,7 +226,9 @@ func promptForFlags(opts *options, name *string) error {
 		}
 		opts.Description = desc
 	}
-	vis, err := opts.Prompter.Select("Visibility", "Private", []string{"Public", "Private", "Internal"})
+	// I51 (audit): "Internal" removed from the prompt — see flag-side
+	// comment. Restore once the server implements internal-visibility.
+	vis, err := opts.Prompter.Select("Visibility", "Private", []string{"Public", "Private"})
 	if err != nil {
 		return err
 	}
@@ -238,8 +237,6 @@ func promptForFlags(opts *options, name *string) error {
 		opts.Public = true
 	case 1:
 		opts.Private = true
-	case 2:
-		opts.Internal = true
 	}
 	addReadme, err := opts.Prompter.Confirm("Add a README file?", false)
 	if err != nil {
@@ -274,7 +271,7 @@ func executeCreate(ctx context.Context, rc *repos.Client, owner, name string, op
 		Name:              name,
 		Description:       opts.Description,
 		Homepage:          opts.Homepage,
-		Private:           opts.Private || (!opts.Public && !opts.Internal),
+		Private:           opts.Private || !opts.Public,
 		AutoInit:          opts.AddReadme,
 		GitignoreTemplate: opts.Gitignore,
 		LicenseTemplate:   opts.License,
@@ -282,8 +279,6 @@ func executeCreate(ctx context.Context, rc *repos.Client, owner, name string, op
 	switch {
 	case opts.Public:
 		in.Visibility = "public"
-	case opts.Internal:
-		in.Visibility = "internal"
 	default:
 		in.Visibility = "private"
 	}

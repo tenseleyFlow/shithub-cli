@@ -42,6 +42,7 @@ type options struct {
 	EnableProjects    *bool
 	EnableWiki        *bool
 	EnableDiscussions *bool
+	Archived          *bool
 
 	Topics       []string
 	AddTopics    []string
@@ -49,14 +50,18 @@ type options struct {
 
 	// Raw flag values from cobra (kept private so we can tell whether
 	// the user explicitly passed them).
-	descRaw     string
-	homepageRaw string
-	branchRaw   string
-	visRaw      string
-	descSet     bool
-	homepageSet bool
-	branchSet   bool
-	visSet      bool
+	descRaw      string
+	homepageRaw  string
+	branchRaw    string
+	visRaw       string
+	archived     bool // I50: --archived flag value
+	unarchived   bool // I50: --unarchive flag value
+	descSet      bool
+	homepageSet  bool
+	branchSet    bool
+	visSet       bool
+	archivedSet  bool
+	unarchiveSet bool
 }
 
 // NewCmd builds the cobra command.
@@ -99,6 +104,25 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 				v := opts.visRaw
 				opts.Visibility = &v
 			}
+			// I50: archive/unarchive flags fold into a single *bool patch.
+			opts.archivedSet = c.Flags().Changed("archived")
+			opts.unarchiveSet = c.Flags().Changed("unarchive")
+			if opts.archivedSet && opts.unarchiveSet {
+				return fmt.Errorf("repo edit: --archived and --unarchive are mutually exclusive")
+			}
+			if opts.archivedSet {
+				// `--archived` (presence = true; `--archived=false`
+				// works as an explicit unarchive too).
+				v := opts.archived
+				opts.Archived = &v
+			} else if opts.unarchiveSet && opts.unarchived {
+				// `--unarchive` is the friendly mirror of
+				// `--archived=false` — only acts when explicitly set
+				// to true. We never want it to flip-flop on the
+				// no-value default.
+				v := false
+				opts.Archived = &v
+			}
 			return Run(c.Context(), opts)
 		},
 	}
@@ -111,7 +135,11 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	// same rationale.
 	cmd.Flags().StringVar(&opts.homepageRaw, "homepage", "", "URL associated with the repository")
 	cmd.Flags().StringVar(&opts.branchRaw, "default-branch", "", "default branch name")
-	cmd.Flags().StringVar(&opts.visRaw, "visibility", "", "visibility: {public|private|internal}")
+	// I51 (audit): pre-fix the help advertised `internal` even though
+	// the server 422s on it. shithub doesn't implement gh's `internal`
+	// visibility (org-member-only); land it server-side first, then
+	// reintroduce the option here.
+	cmd.Flags().StringVar(&opts.visRaw, "visibility", "", "visibility: {public|private}")
 
 	cmd.Flags().StringSliceVar(&opts.Topics, "topics", nil, "replace topics with this comma-separated list")
 	cmd.Flags().StringSliceVar(&opts.AddTopics, "add-topic", nil, "add a topic (repeatable)")
@@ -123,6 +151,13 @@ func NewCmd(f *cmdutil.Factory) *cobra.Command {
 	addBoolPtrFlag(cmd, &opts.EnableProjects, "enable-projects", "enable projects (no-op on shithub for now)")
 	addBoolPtrFlag(cmd, &opts.EnableWiki, "enable-wiki", "enable wiki (no-op on shithub for now)")
 	addBoolPtrFlag(cmd, &opts.EnableDiscussions, "enable-discussions", "enable discussions (no-op on shithub for now)")
+	// I50 (audit): archive / unarchive surface. The server already
+	// honors `archived` on PATCH; pre-fix the only way to flip it was
+	// `api -X PATCH ... -F archived=true`. Two boolean flags rather
+	// than one tri-state because the cobra `--archive=false` form is
+	// awkward in scripts.
+	cmd.Flags().BoolVar(&opts.archived, "archived", false, "archive the repository (lock writes, hide from default lists)")
+	cmd.Flags().BoolVar(&opts.unarchived, "unarchive", false, "unarchive the repository (re-enable writes)")
 	return cmd
 }
 
@@ -167,6 +202,35 @@ func Run(ctx context.Context, opts *options) error {
 		HasProjects:       opts.EnableProjects,
 		HasWiki:           opts.EnableWiki,
 		HasDiscussions:    opts.EnableDiscussions,
+		Archived:          opts.Archived,
+	}
+	// I51 (audit): reject `--visibility internal` client-side. Server
+	// rejects with a 422 anyway; catching it locally turns a confusing
+	// API error into a clean message that names the actual flag.
+	if patch.Visibility != nil {
+		switch *patch.Visibility {
+		case "public", "private":
+			// ok
+		default:
+			return fmt.Errorf("repo edit: --visibility must be 'public' or 'private' (got %q)", *patch.Visibility)
+		}
+	}
+	// I57 (audit): the three feature toggles are accepted but no-op
+	// against shithub today. Pre-fix the CLI printed "✓ Updated" with
+	// no indication that the flag had no effect. Print a note for each
+	// passed flag so the user knows the request silently shipped to a
+	// feature-less server. Wiring lands when the underlying features do.
+	for _, vf := range []struct {
+		name string
+		set  bool
+	}{
+		{"--enable-projects", opts.EnableProjects != nil},
+		{"--enable-wiki", opts.EnableWiki != nil},
+		{"--enable-discussions", opts.EnableDiscussions != nil},
+	} {
+		if vf.set {
+			fmt.Fprintf(opts.IO.ErrOut, "note: %s is accepted but has no effect on this host yet\n", vf.name)
+		}
 	}
 
 	// H27: pre-fix, `--add-topic ""` produced `opts.AddTopics = [""]` —
