@@ -11,7 +11,10 @@ import (
 type exporter struct{}
 
 func (exporter) Fields() []string {
-	return []string{"createdAt", "fingerprint", "id", "kind", "key", "readOnly", "title", "url", "verified"}
+	// I7b (audit-I25): `nodeId` lives alongside the sequential `id` for
+	// one release cycle. New scripts should pick `nodeId`; `id` will be
+	// stripped at v0.2.0.
+	return []string{"createdAt", "fingerprint", "id", "kind", "key", "nodeId", "readOnly", "title", "url", "verified"}
 }
 
 func (exporter) Filter(v any) (any, error) {
@@ -31,6 +34,7 @@ func (exporter) Filter(v any) (any, error) {
 			"id":          k.ID,
 			"kind":        kind,
 			"key":         k.Key,
+			"nodeId":      k.NodeID,
 			"readOnly":    k.ReadOnly,
 			"title":       k.Title,
 			"url":         k.URL,

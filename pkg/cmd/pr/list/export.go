@@ -43,6 +43,7 @@ var exportableFields = []string{
 	"mergeable",
 	"merged",
 	"mergedAt",
+	"nodeId",
 	"number",
 	"reviewDecision",
 	"state",
@@ -108,12 +109,15 @@ func ProjectPR(p pulls.PR) map[string]any {
 		"mergeable":         mergeableFlag(p.Mergeable),
 		"merged":            p.Merged,
 		"mergedAt":          p.MergedAt,
-		"number":            p.Number,
-		"reviewDecision":    p.ReviewDecision,
-		"state":             p.State,
-		"title":             p.Title,
-		"updatedAt":         p.UpdatedAt,
-		"url":               p.HTMLURL,
+		// I7b (audit-I25): opaque opaque-id alongside the sequential
+		// id; prefer for scripts going forward.
+		"nodeId":         p.NodeID,
+		"number":         p.Number,
+		"reviewDecision": p.ReviewDecision,
+		"state":          p.State,
+		"title":          p.Title,
+		"updatedAt":      p.UpdatedAt,
+		"url":            p.HTMLURL,
 	}
 }
 
