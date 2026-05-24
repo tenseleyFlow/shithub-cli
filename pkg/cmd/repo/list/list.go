@@ -157,14 +157,27 @@ func Run(ctx context.Context, opts *options) error {
 	if opts.Owner == "" {
 		all, err = rc.ListAuthenticated(ctx, listOpts)
 	} else {
-		// We don't pre-resolve user-vs-org here — the server endpoints
-		// have different shapes. Try user first; if that yields nothing
-		// and the call succeeded, the caller probably meant the org form.
-		// Both endpoints return the same JSON envelope so a single decode
-		// works for either.
+		// I42 (audit): pre-fix `repo list <org>` only ever tried
+		// /users/{X}/repos. For an org owner the server 404s with
+		// "user not found", and the empty-success fallback below
+		// never ran. Now we also fall back to /orgs/{X}/repos on a
+		// NotFoundError — this matches the audit reproducer (org has
+		// 24 repos, CLI was reporting zero / bailing on 404).
+		//
+		// Two fallback paths: (1) user-success-but-empty (caller
+		// probably meant the org form), and (2) user-404 (the owner
+		// isn't a user). Both end up trying the org endpoint.
 		all, err = rc.ListUser(ctx, opts.Owner, listOpts)
-		if err == nil && len(all) == 0 {
+		switch {
+		case err == nil && len(all) == 0:
 			all, err = rc.ListOrg(ctx, opts.Owner, listOpts)
+		case api.IsNotFoundError(err):
+			orgRepos, orgErr := rc.ListOrg(ctx, opts.Owner, listOpts)
+			if orgErr == nil {
+				all, err = orgRepos, nil
+			}
+			// If the org path also 404s, keep the original user-side
+			// error — the owner doesn't exist as either.
 		}
 	}
 	if err != nil {
