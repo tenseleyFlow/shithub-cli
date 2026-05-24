@@ -20,6 +20,7 @@ import (
 	"github.com/tenseleyFlow/shithub-cli/internal/pulls"
 	"github.com/tenseleyFlow/shithub-cli/internal/tableprinter"
 	issueshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/issue/shared"
+	prshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/pr/shared"
 	repocmdshared "github.com/tenseleyFlow/shithub-cli/pkg/cmd/repo/shared"
 )
 
@@ -180,13 +181,9 @@ func renderTable(io *iostreams.IOStreams, list []pulls.PR) {
 	}
 	tp := tableprinter.New(io.Out, io.IsStdoutTTY(), io.TerminalWidth())
 	for _, p := range list {
-		state := p.State
-		if p.Merged {
-			state = "merged"
-		}
-		if p.Draft {
-			state = "draft"
-		}
+		// audit-I7: shared precedence (merged > closed > draft > open)
+		// so closed-draft PRs no longer falsely render as "draft".
+		state := prshared.DisplayState(&p)
 		tp.AddRow(
 			fmt.Sprintf("#%d", p.Number),
 			state,

@@ -178,13 +178,10 @@ func Run(ctx context.Context, opts *options) error {
 // renderHuman writes the TTY-friendly summary.
 func renderHuman(io *iostreams.IOStreams, repo repocmdshared.RepoRef, p *pulls.PR) {
 	out := io.Out
-	state := p.State
-	if p.Draft {
-		state = "draft"
-	}
-	if p.Merged {
-		state = "merged"
-	}
+	// audit-I7: pre-fix `if Draft { state="draft" }; if Merged { ... }`
+	// meant closed+draft displayed as "draft" — hiding the closed state.
+	// Use the shared precedence helper so view/list/status agree.
+	state := prshared.DisplayState(p)
 	fmt.Fprintf(out, "%s#%d  %s\n", repo.FullName(), p.Number, p.Title)
 	fmt.Fprintf(out, "%s · %s · base:%s ← head:%s\n", state, authorLogin(p), p.Base.Ref, p.Head.Ref)
 	if len(p.Labels) > 0 {

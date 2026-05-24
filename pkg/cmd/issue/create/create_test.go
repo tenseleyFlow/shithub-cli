@@ -93,6 +93,33 @@ func TestCreateWebSkipsAPI(t *testing.T) {
 	}
 }
 
+// TestCreateRejectsMultilineTitle pins audit-I52 at the issue-create
+// boundary. The auditor passed `--title $'one\ntwo'` and the CLI
+// happily forwarded it; ValidateTitle now intercepts before round-trip.
+func TestCreateRejectsMultilineTitle(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	opts := &options{
+		IO:          tf.IOStreams,
+		Prompter:    tf.Prompt,
+		HTTPClient:  tf.Factory.HTTPClient,
+		ConfigFn:    tf.Factory.Config,
+		DefaultHost: tf.Factory.DefaultHost,
+		Opener:      func(string) error { return nil },
+		Repo:        "o/r",
+		Title:       "line one\nline two",
+	}
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for newline in --title, got nil")
+	}
+	if !strings.Contains(err.Error(), "single line") {
+		t.Errorf("error %q does not mention single-line constraint", err.Error())
+	}
+	if len(tf.Server.Calls()) != 0 {
+		t.Errorf("server should not be called when validation fails; got %d calls", len(tf.Server.Calls()))
+	}
+}
+
 func TestCreateMissingTitleErrors(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{

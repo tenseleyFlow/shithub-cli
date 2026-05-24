@@ -107,6 +107,63 @@ func TestProjectPR_F4Fields(t *testing.T) {
 	}
 }
 
+// TestProjectPR_DisplayState pins audit-I39: the exporter projects a
+// `displayState` field so scripts can ask for the human badge without
+// reconstructing the precedence (merged > closed > draft > open).
+// Closed-draft (the I7 reproducer) is exercised twice — once for the
+// exporter field, once to confirm `state` and `merged` are unchanged
+// so existing consumers don't break.
+func TestProjectPR_DisplayState(t *testing.T) {
+	cases := []struct {
+		name             string
+		pr               pulls.PR
+		wantDisplayState string
+		wantState        string
+		wantMerged       bool
+	}{
+		{"open", pulls.PR{State: "open"}, "open", "open", false},
+		{"draft open", pulls.PR{State: "open", Draft: true}, "draft", "open", false},
+		{"closed", pulls.PR{State: "closed"}, "closed", "closed", false},
+		{
+			name:             "closed draft (I7 reproducer)",
+			pr:               pulls.PR{State: "closed", Draft: true},
+			wantDisplayState: "closed",
+			wantState:        "closed",
+			wantMerged:       false,
+		},
+		{
+			name:             "merged",
+			pr:               pulls.PR{State: "closed", Merged: true},
+			wantDisplayState: "merged",
+			wantState:        "closed",
+			wantMerged:       true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ProjectPR(tc.pr)
+			if got["displayState"] != tc.wantDisplayState {
+				t.Errorf("displayState: got %v, want %q", got["displayState"], tc.wantDisplayState)
+			}
+			if got["state"] != tc.wantState {
+				t.Errorf("state: got %v, want %q", got["state"], tc.wantState)
+			}
+			if got["merged"] != tc.wantMerged {
+				t.Errorf("merged: got %v, want %v", got["merged"], tc.wantMerged)
+			}
+		})
+	}
+
+	// Catalog gate so a future trim can't silently drop displayState.
+	catalog := map[string]bool{}
+	for _, f := range ExportableFields() {
+		catalog[f] = true
+	}
+	if !catalog["displayState"] {
+		t.Error("ExportableFields missing displayState (I39)")
+	}
+}
+
 // TestProjectPR_NilReposDegradeGracefully covers the older-server
 // case where the response lacks the `repo` envelope entirely. The
 // exporter must emit nil for the per-side repo fields and false for
