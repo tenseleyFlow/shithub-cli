@@ -86,6 +86,62 @@ func TestExportRejectsUnknownField(t *testing.T) {
 	}
 }
 
+// TestExportSuggestsCloseField pins I47: a single typo with a near
+// match emits a "did you mean ...?" hint inline with the existing
+// error. Levenshtein-2 catches "closed" → "closedAt" and "boddy" →
+// "body" without false-positive matches for unrelated fields.
+func TestExportSuggestsCloseField(t *testing.T) {
+	t.Parallel()
+	exp := fakeExporter{fields: []string{"body", "closedAt", "createdAt", "id", "title"}}
+	cases := []struct {
+		bad  string
+		hint string
+	}{
+		{"closed", "closedAt"},
+		{"boddy", "body"},
+		{"creatdAt", "createdAt"},
+	}
+	for _, tc := range cases {
+		var buf bytes.Buffer
+		opts := Options{JSONFields: tc.bad, JSONSet: true}
+		err := Export(&buf, opts, exp, map[string]any{}, false)
+		if err == nil {
+			t.Errorf("input %q: expected error", tc.bad)
+			continue
+		}
+		if !strings.Contains(err.Error(), "did you mean") || !strings.Contains(err.Error(), tc.hint) {
+			t.Errorf("input %q: error should suggest %q; got %v", tc.bad, tc.hint, err)
+		}
+	}
+}
+
+// TestExportCollectsAllBadFields pins I48: every unknown field surfaces
+// in one error rather than the user having to fix them one at a time.
+func TestExportCollectsAllBadFields(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	exp := fakeExporter{fields: []string{"id", "title", "body"}}
+	opts := Options{JSONFields: "id,boddy,titel,xyzzy", JSONSet: true}
+	err := Export(&buf, opts, exp, map[string]any{"id": 1}, false)
+	if err == nil {
+		t.Fatal("expected error for unknown fields")
+	}
+	msg := err.Error()
+	for _, bad := range []string{"boddy", "titel", "xyzzy"} {
+		if !strings.Contains(msg, bad) {
+			t.Errorf("error should name %q; got: %s", bad, msg)
+		}
+	}
+	// `boddy` near `body`; `titel` near `title`; `xyzzy` is far from
+	// everything so it gets no hint.
+	if !strings.Contains(msg, "did you mean \"body\"") {
+		t.Errorf("expected body hint in: %s", msg)
+	}
+	if !strings.Contains(msg, "did you mean \"title\"") {
+		t.Errorf("expected title hint in: %s", msg)
+	}
+}
+
 // TestExportRejectsEmptyJSONField pins H25: stray comma in --json
 // (e.g. `,name` or `id,,name`) used to surface as `unknown JSON field
 // ""`, leaving the user to guess that the empty string was the parsed
