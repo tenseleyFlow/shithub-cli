@@ -46,10 +46,13 @@ type PR struct {
 	ClosedAt       *time.Time        `json:"closed_at,omitempty"`
 	MergedAt       *time.Time        `json:"merged_at,omitempty"`
 	MergedBy       *api.User         `json:"merged_by,omitempty"`
-	HTMLURL        string            `json:"html_url"`
-	DiffURL        string            `json:"diff_url,omitempty"`
-	PatchURL       string            `json:"patch_url,omitempty"`
-	Repository     *issues.RepoRef   `json:"repository,omitempty"`
+	// AuthorAssociation is gh's 5-value enum (OWNER / MEMBER /
+	// COLLABORATOR / CONTRIBUTOR / NONE). Populated by I7a server-side.
+	AuthorAssociation string          `json:"author_association,omitempty"`
+	HTMLURL           string          `json:"html_url"`
+	DiffURL           string          `json:"diff_url,omitempty"`
+	PatchURL          string          `json:"patch_url,omitempty"`
+	Repository        *issues.RepoRef `json:"repository,omitempty"`
 
 	// Reviews is a server-side convenience: when set, lists the most-recent
 	// review per reviewer. Optional; clients still hit /reviews for the
