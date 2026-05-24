@@ -142,8 +142,10 @@ func Run(ctx context.Context, opts *options) error {
 
 	// H2: cross-namespace verb routing. Submitting a review on an
 	// issue number surfaced "pull request not found"; redirect instead.
+	// audit-I6: `pr review` is PR-only — flag asymmetric so we don't
+	// emit "try `shithub issue review N`" pointing at a dead command.
 	ic := issues.NewClient(client)
-	if cerr := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr review", "review"); cerr != nil {
+	if cerr := crosskind.CheckAsymmetric(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr review", "review", true); cerr != nil {
 		return cerr
 	}
 
