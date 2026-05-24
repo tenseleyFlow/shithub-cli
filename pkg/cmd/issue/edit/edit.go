@@ -142,7 +142,12 @@ func Run(ctx context.Context, opts *options) error {
 	// user passed delta flags (we need the existing list to mutate).
 	patch := issues.EditInput{}
 	if opts.titleSet {
-		t := opts.Title
+		// audit-I52: edit path mirrors create-path validation so
+		// `--title $'one\ntwo'` can't sneak in via PATCH either.
+		t, err := issueshared.ValidateTitle(opts.Title)
+		if err != nil {
+			return fmt.Errorf("issue edit: %w", err)
+		}
 		patch.Title = &t
 	}
 	if opts.bodySet {
