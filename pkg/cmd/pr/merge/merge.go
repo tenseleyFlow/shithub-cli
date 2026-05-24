@@ -184,9 +184,11 @@ func Run(ctx context.Context, opts *options) error {
 	if err != nil {
 		// H2: cross-namespace verb routing — if the number is an issue,
 		// surface a friendly redirect instead of "pull request not found".
+		// audit-I6: `pr merge` is PR-only — mark asymmetric so the
+		// redirect doesn't point at the non-existent `issue merge`.
 		if api.IsNotFoundError(err) {
 			ic := issues.NewClient(client)
-			if cerr := crosskind.Check(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr merge", "merge"); cerr != nil {
+			if cerr := crosskind.CheckAsymmetric(ctx, ic, pc, ref.Repo.Owner, ref.Repo.Name, ref.Number, "pr", "pr merge", "merge", true); cerr != nil {
 				return cerr
 			}
 		}
