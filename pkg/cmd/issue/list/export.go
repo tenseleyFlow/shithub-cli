@@ -14,10 +14,15 @@ type exporter struct{}
 func (exporter) Fields() []string { return exportableFields }
 
 var exportableFields = []string{
+	// I8 (audit-I15): mirrors gh's `issue view --json` catalog. Stubs
+	// (reactionGroups, projectItems) ship as empty for ported scripts;
+	// real wiring lands when reactions/projects features ship.
 	"assignees",
+	"assigneesCount",
 	"author",
 	"body",
 	"closedAt",
+	"closedBy",
 	"comments",
 	"createdAt",
 	"id",
@@ -27,6 +32,8 @@ var exportableFields = []string{
 	"nodeId",
 	"number",
 	"pinned",
+	"projectItems",
+	"reactionGroups",
 	"repository",
 	"state",
 	"stateReason",
@@ -70,17 +77,23 @@ func projectIssue(i issues.Issue) map[string]any {
 	if i.Repository != nil {
 		repo = map[string]any{"nameWithOwner": i.Repository.FullName, "name": i.Repository.Name}
 	}
+	var closedBy any
+	if i.ClosedBy != nil {
+		closedBy = map[string]any{"login": i.ClosedBy.Login}
+	}
 	return map[string]any{
-		"assignees": assignees,
-		"author":    author,
-		"body":      i.Body,
-		"closedAt":  i.ClosedAt,
-		"comments":  i.Comments,
-		"createdAt": i.CreatedAt,
-		"id":        i.ID,
-		"labels":    labels,
-		"locked":    i.Locked,
-		"milestone": milestone,
+		"assignees":      assignees,
+		"assigneesCount": len(i.Assignees), // I8: synthesized client-side
+		"author":         author,
+		"body":           i.Body,
+		"closedAt":       i.ClosedAt,
+		"closedBy":       closedBy, // I8 (audit-I15): from I7a server expansion
+		"comments":       i.Comments,
+		"createdAt":      i.CreatedAt,
+		"id":             i.ID,
+		"labels":         labels,
+		"locked":         i.Locked,
+		"milestone":      milestone,
 		// I7b (audit-I25): opaque opaque-id alongside the sequential id.
 		"nodeId":      i.NodeID,
 		"number":      i.Number,
@@ -91,5 +104,9 @@ func projectIssue(i issues.Issue) map[string]any {
 		"title":       i.Title,
 		"updatedAt":   i.UpdatedAt,
 		"url":         i.HTMLURL,
+		// I8 (audit-I15): deferred-feature stubs. Wiring lands when
+		// reactions + projects features ship.
+		"reactionGroups": []any{},
+		"projectItems":   []any{},
 	}
 }
