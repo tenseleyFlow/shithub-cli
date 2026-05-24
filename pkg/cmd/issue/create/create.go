@@ -140,9 +140,15 @@ func Run(ctx context.Context, opts *options) error {
 		opts.Body = composed
 	}
 
-	if strings.TrimSpace(opts.Title) == "" {
-		return errors.New("issue create: title is required (--title or interactive)")
+	// audit-I52: reject newline/null titles before round-trip. The
+	// auditor's `--title $'one\ntwo'` reproduces with surprisingly mild
+	// pushback (bash keeps the newline; execve forwards it intact;
+	// server stored verbatim). Validator returns the trimmed title.
+	clean, err := issueshared.ValidateTitle(opts.Title)
+	if err != nil {
+		return fmt.Errorf("issue create: %w", err)
 	}
+	opts.Title = clean
 
 	client, err := opts.HTTPClient(ref.Host)
 	if err != nil {
