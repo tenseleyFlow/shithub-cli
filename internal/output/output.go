@@ -172,14 +172,23 @@ func Export(out io.Writer, opts Options, exporter Exporter, data any, prettyJSON
 	// Field validation against the exporter's catalogue. Build the
 	// requested set in one pass so the post-Filter projection can
 	// reuse it without re-parsing the comma list.
+	//
+	// I8 (audit-I47 + I48): collect all unknown fields up front and
+	// emit a single multi-line error with per-field suggestions where
+	// available. Pre-fix the loop bailed on the first typo, forcing
+	// users to fix one field at a time; and there was no Levenshtein
+	// suggestion, so `--json closed` (where the field is `closedAt`)
+	// got the bare "unknown JSON field" without a hint.
 	var requestedSet map[string]struct{}
 	if opts.JSONFields != "" {
 		requested := strings.Split(opts.JSONFields, ",")
 		requestedSet = make(map[string]struct{}, len(requested))
+		validFields := exporter.Fields()
 		valid := map[string]struct{}{}
-		for _, f := range exporter.Fields() {
+		for _, f := range validFields {
 			valid[f] = struct{}{}
 		}
+		var bad []string
 		for _, r := range requested {
 			r = strings.TrimSpace(r)
 			// H25: pre-fix, `--json ",name"` produced `unknown JSON field ""`
@@ -190,9 +199,13 @@ func Export(out io.Writer, opts Options, exporter Exporter, data any, prettyJSON
 				return fmt.Errorf("--json value contains an empty field (check for stray or trailing commas)")
 			}
 			if _, ok := valid[r]; !ok {
-				return fmt.Errorf("unknown JSON field %q; valid: %s", r, strings.Join(exporter.Fields(), ", "))
+				bad = append(bad, r)
+				continue
 			}
 			requestedSet[r] = struct{}{}
+		}
+		if len(bad) > 0 {
+			return unknownJSONFieldsError(bad, validFields)
 		}
 	}
 
@@ -405,4 +418,95 @@ func projectMap(m map[string]any, fields map[string]struct{}) map[string]any {
 		}
 	}
 	return out
+}
+
+// unknownJSONFieldsError builds the I48 multi-field error message:
+// every bad field on its own line with an optional "did you mean ...?"
+// suggestion, followed by the full valid catalog. Single-field path
+// still produces a sensible one-liner.
+func unknownJSONFieldsError(bad, validFields []string) error {
+	if len(bad) == 1 {
+		// Keep the single-field path single-line; older scripts may
+		// scrape the message and a wrap would surprise them.
+		want := bad[0]
+		if s := suggestField(want, validFields); s != "" {
+			return fmt.Errorf("unknown JSON field %q (did you mean %q?); valid: %s",
+				want, s, strings.Join(validFields, ", "))
+		}
+		return fmt.Errorf("unknown JSON field %q; valid: %s",
+			want, strings.Join(validFields, ", "))
+	}
+	var msg strings.Builder
+	msg.WriteString("unknown JSON field(s):")
+	for _, b := range bad {
+		if s := suggestField(b, validFields); s != "" {
+			fmt.Fprintf(&msg, "\n  - %q (did you mean %q?)", b, s)
+		} else {
+			fmt.Fprintf(&msg, "\n  - %q", b)
+		}
+	}
+	fmt.Fprintf(&msg, "\n  valid: %s", strings.Join(validFields, ", "))
+	return errors.New(msg.String())
+}
+
+// suggestField returns the closest match from `valid` to `want` within
+// Levenshtein distance 2, or "" when no close match exists. Two-char
+// edit budget catches transposes ("nuumber" → "number") and one
+// missing/extra char ("boddy" → "body", "closed" → "closedAt") without
+// catching unrelated fields. Empty if the closest match exceeds the
+// budget; the caller falls back to the plain error message.
+func suggestField(want string, valid []string) string {
+	best := ""
+	bestDist := 3 // 3 = "not close enough"; we accept ≤2
+	for _, v := range valid {
+		d := editDistance(want, v)
+		if d < bestDist {
+			best = v
+			bestDist = d
+		}
+	}
+	if bestDist > 2 {
+		return ""
+	}
+	return best
+}
+
+// editDistance computes Levenshtein distance between a and b. The
+// catalogs are small (≤30 fields, ≤25 chars each) so the O(len(a) *
+// len(b)) DP is fine — no need for a fancy library.
+func editDistance(a, b string) int {
+	ar := []rune(a)
+	br := []rune(b)
+	if len(ar) == 0 {
+		return len(br)
+	}
+	if len(br) == 0 {
+		return len(ar)
+	}
+	prev := make([]int, len(br)+1)
+	curr := make([]int, len(br)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(ar); i++ {
+		curr[0] = i
+		for j := 1; j <= len(br); j++ {
+			cost := 1
+			if ar[i-1] == br[j-1] {
+				cost = 0
+			}
+			del := prev[j] + 1
+			ins := curr[j-1] + 1
+			sub := prev[j-1] + cost
+			curr[j] = del
+			if ins < curr[j] {
+				curr[j] = ins
+			}
+			if sub < curr[j] {
+				curr[j] = sub
+			}
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(br)]
 }

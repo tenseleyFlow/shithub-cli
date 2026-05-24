@@ -22,16 +22,29 @@ func ExportableFields() []string {
 }
 
 var exportableFields = []string{
+	// I8 (audit-I14): the field catalog mirrors what `pr view --json`
+	// exposes in gh. Stub-empty fields (latestReviews / projectItems /
+	// statusCheckRollup / closingIssuesReferences / files) are documented
+	// in the field-help text; they ship as deferred-feature placeholders
+	// so ported gh scripts can probe for them without crashing.
+	"additions",
+	"assignees",
 	"author",
+	"authorAssociation",
 	"baseRefName",
 	"baseRefOid",
 	"baseRepository",
 	"body",
+	"changedFiles",
 	"closedAt",
+	"closingIssuesReferences",
 	"comments",
+	"commits",
 	"createdAt",
+	"deletions",
 	"displayState",
 	"draft",
+	"files",
 	"headRefName",
 	"headRefOid",
 	"headRepository",
@@ -39,14 +52,20 @@ var exportableFields = []string{
 	"isCrossRepository",
 	"isDraft",
 	"labels",
+	"latestReviews",
 	"mergeStateStatus",
 	"mergeable",
 	"merged",
 	"mergedAt",
+	"mergedBy",
+	"milestone",
 	"nodeId",
 	"number",
+	"projectItems",
 	"reviewDecision",
+	"reviewRequests",
 	"state",
+	"statusCheckRollup",
 	"title",
 	"updatedAt",
 	"url",
@@ -80,6 +99,29 @@ func ProjectPR(p pulls.PR) map[string]any {
 	labels := make([]map[string]any, 0, len(p.Labels))
 	for _, l := range p.Labels {
 		labels = append(labels, map[string]any{"name": l.Name, "color": l.Color})
+	}
+	// I8 (audit-I14): assignees/mergedBy/milestone/reviewRequests
+	// project through the user envelope helpers below; review requests
+	// fold reviewers + teams into one gh-compat shape.
+	assignees := make([]map[string]any, 0, len(p.Assignees))
+	for _, a := range p.Assignees {
+		login := a.Login
+		assignees = append(assignees, map[string]any{"login": login})
+	}
+	reviewRequests := make([]map[string]any, 0, len(p.RequestedRevs))
+	for _, r := range p.RequestedRevs {
+		reviewRequests = append(reviewRequests, map[string]any{"login": r.Login})
+	}
+	var mergedBy any
+	if p.MergedBy != nil {
+		mergedBy = map[string]any{"login": p.MergedBy.Login}
+	}
+	var milestone any
+	if p.Milestone != nil {
+		milestone = map[string]any{
+			"number": p.Milestone.Number,
+			"title":  p.Milestone.Title,
+		}
 	}
 	return map[string]any{
 		"author":         author,
@@ -118,6 +160,26 @@ func ProjectPR(p pulls.PR) map[string]any {
 		"title":          p.Title,
 		"updatedAt":      p.UpdatedAt,
 		"url":            p.HTMLURL,
+		// I8 (audit-I14): gh-canonical fields from I7a server expansion.
+		"additions":         p.Additions,
+		"assignees":         assignees,
+		"authorAssociation": p.AuthorAssociation,
+		"changedFiles":      p.ChangedFiles,
+		"commits":           p.Commits,
+		"deletions":         p.Deletions,
+		"mergedBy":          mergedBy,
+		"milestone":         milestone,
+		"reviewRequests":    reviewRequests,
+		// Deferred-feature stubs. Each returns an empty value of the
+		// gh-canonical shape so ported scripts can probe-and-skip
+		// rather than crashing on a missing key. Wiring lands when the
+		// underlying feature ships (reactions, projects, status
+		// checks, linked-issue parser, file-list lazy fetch).
+		"closingIssuesReferences": []any{},
+		"files":                   []any{},
+		"latestReviews":           []any{},
+		"projectItems":            []any{},
+		"statusCheckRollup":       map[string]any{"state": "UNKNOWN"},
 	}
 }
 
