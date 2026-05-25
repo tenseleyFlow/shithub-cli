@@ -108,19 +108,62 @@ func TestStatusJSONShape(t *testing.T) {
 	}
 }
 
-func TestStatusShowTokenOnTTYRefuses(t *testing.T) {
+// TestStatusShowTokenOnNonTTYRefuses pins audit-I21: pre-fix the
+// TTY/non-TTY guard was inverted — refused the TTY case (user typed
+// the command in their own terminal, fine) while allowing the
+// non-TTY case (pipe-to-cat, redirect-to-file, CI log capture) which
+// is where the bearer token actually leaks. Now the dangerous case
+// is the rejected one; pair with --json to make redirection
+// intentional, or use `auth token` for scripts.
+func TestStatusShowTokenOnNonTTYRefuses(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.ShowToken = true
+	tf.IOStreams.SetStdoutTTY(false)
+	tf.Config.Hosts.Get("shithub.sh").User = "mf"
+	_ = tf.Config.Hosts.Save()
+
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected refusal on non-TTY")
+	}
+	if !strings.Contains(err.Error(), "requires a TTY") {
+		t.Errorf("error should explain refusal, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "auth token") {
+		t.Errorf("error should point at the scripting surface, got: %v", err)
+	}
+}
+
+// TestStatusShowTokenOnTTYAllowed pins the inverse: the TTY case is
+// fine (user explicitly typed the command in their own terminal).
+func TestStatusShowTokenOnTTYAllowed(t *testing.T) {
 	opts, tf := newOpts(t)
 	opts.ShowToken = true
 	tf.IOStreams.SetStdoutTTY(true)
 	tf.Config.Hosts.Get("shithub.sh").User = "mf"
 	_ = tf.Config.Hosts.Save()
 
+	// We don't care whether Run errors for other reasons (host not
+	// reachable in tests); just confirm the TTY guard didn't fire.
 	err := Run(context.Background(), opts)
-	if err == nil {
-		t.Fatal("expected refusal on TTY")
+	if err != nil && strings.Contains(err.Error(), "requires a TTY") {
+		t.Errorf("TTY case should not be rejected; got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "leak the token") {
-		t.Errorf("error should explain refusal, got: %v", err)
+}
+
+// TestStatusShowTokenOnNonTTYWithJSONAllowed pins the --json escape
+// hatch: redirection is the obvious intent when --json is set.
+func TestStatusShowTokenOnNonTTYWithJSONAllowed(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.ShowToken = true
+	opts.JSON = true
+	tf.IOStreams.SetStdoutTTY(false)
+	tf.Config.Hosts.Get("shithub.sh").User = "mf"
+	_ = tf.Config.Hosts.Save()
+
+	err := Run(context.Background(), opts)
+	if err != nil && strings.Contains(err.Error(), "requires a TTY") {
+		t.Errorf("--json should bypass the TTY guard; got: %v", err)
 	}
 }
 

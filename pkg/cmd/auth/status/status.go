@@ -80,8 +80,15 @@ func Run(ctx context.Context, opts *Options) error {
 		return err
 	}
 
-	if opts.ShowToken && opts.IO.IsStdoutTTY() && !opts.JSON {
-		return errors.New("auth: --show-token in a terminal would leak the token; re-run with output piped or use --json")
+	// I21 (audit): pre-fix the guard refused the TTY case but let a
+	// non-TTY (pipe to `| cat`, redirect to a file in a CI job) print
+	// the bearer in plaintext — exactly the wrong way around. The
+	// dangerous case is the file/log capture; the TTY case is the
+	// user typing the command at their own terminal. Refuse non-TTY
+	// unless --json (where redirection is the obvious intent). Point
+	// scripts at `auth token` which is the documented machine surface.
+	if opts.ShowToken && !opts.IO.IsStdoutTTY() && !opts.JSON {
+		return errors.New("auth: --show-token requires a TTY (or pair with --json); for scripting use 'shithub auth token'")
 	}
 
 	// Normalize --hostname strictly so a typo errors out instead of

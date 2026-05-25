@@ -121,12 +121,54 @@ func setRepoSecret(ctx context.Context, opts *options, value []byte) error {
 	if err != nil {
 		return err
 	}
+	// I32 (audit): pre-fix `secret set` printed "Set secret X" whether
+	// it was the first write or an update. variable set already
+	// distinguishes Created vs Updated — secrets should match. Probe
+	// existence with ListRepoSecrets (cheap; the surface returns
+	// metadata only, no plaintext) so the success line picks the
+	// right verb.
+	existed := repoSecretExists(ctx, sc, ref.Owner, ref.Name, opts.Name)
 	if err := sc.PutRepoSecret(ctx, ref.Owner, ref.Name, opts.Name, input); err != nil {
 		return err
 	}
-	fmt.Fprintf(opts.IO.ErrOut, "%s Set secret %s in %s/%s\n",
-		opts.IO.SuccessIcon(), opts.Name, ref.Owner, ref.Name)
+	verb := "Created"
+	if existed {
+		verb = "Updated"
+	}
+	fmt.Fprintf(opts.IO.ErrOut, "%s %s secret %s in %s/%s\n",
+		opts.IO.SuccessIcon(), verb, opts.Name, ref.Owner, ref.Name)
 	return nil
+}
+
+// repoSecretExists returns true when a secret of this name is already
+// registered on the repo. Best-effort: a list-secrets RPC failure
+// downgrades to "treat as create" so the success line still ships even
+// when the server is briefly cranky.
+func repoSecretExists(ctx context.Context, sc *secrets.Client, owner, repo, name string) bool {
+	rows, err := sc.ListRepoSecrets(ctx, owner, repo)
+	if err != nil {
+		return false
+	}
+	for _, s := range rows {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// orgSecretExists is the org-side mirror of repoSecretExists.
+func orgSecretExists(ctx context.Context, sc *secrets.Client, org, name string) bool {
+	rows, err := sc.ListOrgSecrets(ctx, org)
+	if err != nil {
+		return false
+	}
+	for _, s := range rows {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func setOrgSecret(ctx context.Context, opts *options, value []byte) error {
@@ -148,11 +190,17 @@ func setOrgSecret(ctx context.Context, opts *options, value []byte) error {
 	}
 	input.Visibility = visibility
 	input.SelectedRepositoryIDs = ids
+	// I32 (audit): Created/Updated wording for org secrets too.
+	existed := orgSecretExists(ctx, sc, opts.Org, opts.Name)
 	if err := sc.PutOrgSecret(ctx, opts.Org, opts.Name, input); err != nil {
 		return err
 	}
-	fmt.Fprintf(opts.IO.ErrOut, "%s Set secret %s in org %s (%s)\n",
-		opts.IO.SuccessIcon(), opts.Name, opts.Org, visibility)
+	verb := "Created"
+	if existed {
+		verb = "Updated"
+	}
+	fmt.Fprintf(opts.IO.ErrOut, "%s %s secret %s in org %s (%s)\n",
+		opts.IO.SuccessIcon(), verb, opts.Name, opts.Org, visibility)
 	return nil
 }
 

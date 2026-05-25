@@ -99,6 +99,52 @@ func TestSetRepoSecretPlaintextFallback(t *testing.T) {
 	}
 }
 
+// TestSetRepoSecretCreatedVsUpdated pins audit-I32: secret set
+// matches the variable-set wording — "Created secret X" on first
+// write, "Updated secret X" on subsequent writes. Pre-fix both flows
+// printed "Set secret X" which forced the user to remember whether
+// they'd already added it.
+func TestSetRepoSecretCreatedVsUpdated(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		listed   []secrets.Secret
+		wantVerb string
+	}{
+		{"create when absent", nil, "Created"},
+		{"update when present", []secrets.Secret{{Name: "FOO"}}, "Updated"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tf := cmdutiltest.New(t)
+			tf.Server.Handle(http.MethodGet, "/api/v1/repos/o/r/actions/secrets/public-key", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			})
+			tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r/actions/secrets", 200,
+				secrets.SecretsResponse{Secrets: tc.listed})
+			tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/actions/secrets/FOO", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			})
+
+			opts := &options{
+				IO:          tf.IOStreams,
+				HTTPClient:  tf.Factory.HTTPClient,
+				DefaultHost: tf.Factory.DefaultHost,
+				Name:        "FOO",
+				Repo:        "o/r",
+				App:         "actions",
+				Body:        "v",
+				BodySet:     true,
+			}
+			if err := Run(context.Background(), opts); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			out := tf.ErrOut.String()
+			if !strings.Contains(out, tc.wantVerb+" secret FOO") {
+				t.Errorf("expected %q in stderr; got %q", tc.wantVerb+" secret FOO", out)
+			}
+		})
+	}
+}
+
 // TestSetRejectsUnsupportedApp keeps the --app flag locked to actions.
 func TestSetRejectsUnsupportedApp(t *testing.T) {
 	tf := cmdutiltest.New(t)
