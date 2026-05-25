@@ -282,3 +282,44 @@ func TestCreate_SuccessLineFallsBackToFullName(t *testing.T) {
 		t.Errorf("A11 regression: success line printed with empty body; got=%q", got)
 	}
 }
+
+// TestSplitNameArgRejectsSneakyNames pins audit-I24: `repo create
+// "../sneaky"` used to split into owner=".." + name="sneaky", send
+// off to the API, and surface a confusing "org not found" error. The
+// CLI now rejects non-slug owners/names at parse time with a clear
+// message naming the bad component.
+func TestSplitNameArgRejectsSneakyNames(t *testing.T) {
+	cases := []struct {
+		in      string
+		wantErr string
+	}{
+		{"../sneaky", "invalid owner name"},
+		{"owner/..", "invalid repo name"},
+		{".dotleading/x", "invalid owner name"},
+		{"x/.dotleading", "invalid repo name"},
+		{"-dashleading/x", "invalid owner name"},
+		{"x/trailing.", "invalid repo name"},
+		{"foo$bar/x", "invalid owner name"},
+	}
+	for _, tc := range cases {
+		_, _, err := splitNameArg(tc.in)
+		if err == nil {
+			t.Errorf("input %q: expected error, got nil", tc.in)
+			continue
+		}
+		if !strings.Contains(err.Error(), tc.wantErr) {
+			t.Errorf("input %q: error should mention %q; got %v", tc.in, tc.wantErr, err)
+		}
+	}
+}
+
+// TestSplitNameArgAcceptsGoodForms pins the happy path so the I24
+// guard doesn't accidentally reject legitimate slugs.
+func TestSplitNameArgAcceptsGoodForms(t *testing.T) {
+	for _, in := range []string{"alice/my-repo", "a/b", "my.org/some_repo.v2", "x/y", "fresh-repo"} {
+		_, _, err := splitNameArg(in)
+		if err != nil {
+			t.Errorf("input %q: unexpected error %v", in, err)
+		}
+	}
+}
