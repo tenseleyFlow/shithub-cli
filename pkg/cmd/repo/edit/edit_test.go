@@ -231,3 +231,34 @@ func TestMergeTopicsCaseInsensitive(t *testing.T) {
 		}
 	}
 }
+
+// TestMergeTopicsDuplicateAddIsIdempotent pins I54: `--add-topic foo`
+// twice in the same invocation, or `--add-topic foo` when foo is
+// already on the repo, must result in `[..., foo]` once — never
+// `[..., foo, foo]`. mergeTopics's `seen` set is the source of truth;
+// this test guards against a future regression that drops it.
+func TestMergeTopicsDuplicateAddIsIdempotent(t *testing.T) {
+	cases := []struct {
+		name             string
+		existing, add    []string
+		wantContainsOnce string
+	}{
+		{"add twice in one call", nil, []string{"foo", "foo"}, "foo"},
+		{"add existing topic", []string{"foo"}, []string{"foo"}, "foo"},
+		{"add existing case-shift", []string{"Foo"}, []string{"FOO"}, "Foo"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mergeTopics(tc.existing, tc.add, nil)
+			count := 0
+			for _, v := range got {
+				if strings.EqualFold(v, tc.wantContainsOnce) {
+					count++
+				}
+			}
+			if count != 1 {
+				t.Errorf("topic %q appeared %d times in %v; want exactly 1", tc.wantContainsOnce, count, got)
+			}
+		})
+	}
+}
