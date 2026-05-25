@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"text/template"
 	"time"
@@ -395,7 +396,12 @@ func runSingle(ctx context.Context, opts *Options, client *api.Client, method, e
 	}
 
 	if opts.Verbose {
-		printVerboseRequest(opts.IO, method, client.BaseURL()+resolveLeading(endpoint), headers, body)
+		// I53 (audit): show the headers the api.Client actually adds
+		// (User-Agent, Accept, Content-Type, Authorization redacted)
+		// alongside any caller -H overrides — not just the bare URL +
+		// user-supplied headers.
+		effective := client.VerboseRequestHeaders(headers, body != nil)
+		printVerboseRequest(opts.IO, method, client.BaseURL()+resolveLeading(endpoint), effective, body)
 	}
 
 	reqOpts := []api.RequestOption{}
@@ -509,7 +515,7 @@ func runTemplate(out io.Writer, tmpl string, body []byte) error {
 	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, input); err != nil {
-		return err
+		return prettifyTemplateExecError(err)
 	}
 	rendered := buf.Bytes()
 	if _, err := out.Write(rendered); err != nil {
@@ -520,6 +526,32 @@ func runTemplate(out io.Writer, tmpl string, body []byte) error {
 		return err
 	}
 	return nil
+}
+
+// prettifyTemplateExecError rewrites text/template's execution-error
+// strings into something a `gh api -t` user can act on. I37 (audit):
+// the raw error reads
+//
+//	template: api:1:2: executing "api" at <.nonexistent>: map has no entry for key "nonexistent"
+//
+// — the position prefix and the `at <.X>` clause are noise to anyone
+// who didn't write Go templates. We strip the "template: NAME:L:C:
+// executing ..." preamble and surface the inner reason with an
+// `api -t:` lead-in. The most common case, "map has no entry for
+// key X", is rewritten as `unknown response field "X"` because that
+// is the user's actual mental model when porting from gh.
+var templateExecPrefixRE = regexp.MustCompile(`^template: [^:]+:\d+:\d+: executing "[^"]+" at <[^>]+>: `)
+
+func prettifyTemplateExecError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	rest := templateExecPrefixRE.ReplaceAllString(msg, "")
+	if m := regexp.MustCompile(`^map has no entry for key "([^"]+)"`).FindStringSubmatch(rest); m != nil {
+		return fmt.Errorf("api -t: unknown response field %q", m[1])
+	}
+	return fmt.Errorf("api -t: %s", rest)
 }
 
 // writeHeaders renders the status line + headers in HTTP-ish text form

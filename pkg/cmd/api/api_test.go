@@ -24,6 +24,33 @@ func newOpts(t *testing.T) (*Options, *cmdutiltest.Factory) {
 	}, tf
 }
 
+// TestRunVerboseEchoesEffectiveRequestHeaders pins I37/I53: --verbose
+// must echo the headers the api.Client actually sends — User-Agent,
+// Accept, redacted Authorization — not just the bare URL plus any -H
+// overrides. Pre-fix users couldn't tell from --verbose alone why the
+// server was rejecting their request (wrong Accept, missing UA, …).
+func TestRunVerboseEchoesEffectiveRequestHeaders(t *testing.T) {
+	opts, tf := newOpts(t)
+	opts.Endpoint = "user"
+	opts.Verbose = true
+	tf.Server.RegisterJSON("GET", "/api/v1/user", 200, map[string]any{"id": 1})
+
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	stderr := tf.ErrOut.String()
+	for _, want := range []string{
+		"> GET ",
+		"> Authorization: [redacted]",
+		"> Accept: application/json",
+		"> User-Agent: shithub-cli/",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("verbose stderr missing %q; got:\n%s", want, stderr)
+		}
+	}
+}
+
 func TestRunGetDecodesBody(t *testing.T) {
 	opts, tf := newOpts(t)
 	opts.Endpoint = "user"
@@ -165,6 +192,16 @@ func TestRunTemplateRejectsMissingKey(t *testing.T) {
 	}
 	if strings.Contains(tf.Out.String(), "<no value>") {
 		t.Errorf("C13 regression: output contains '<no value>': %q", tf.Out.String())
+	}
+	// I37 (audit): the error must not leak the text/template
+	// position prefix `template: api:1:2: executing "api" at <X>:`;
+	// users porting `gh api` scripts have no use for that frame.
+	// Expected lead-in is `api -t: unknown response field "X"`.
+	if !strings.Contains(err.Error(), `unknown response field "totally_missing_field"`) {
+		t.Errorf("I37: want friendly `unknown response field`, got %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "template: api:") {
+		t.Errorf("I37: error still leaks `template: api:` prefix: %q", err.Error())
 	}
 }
 
