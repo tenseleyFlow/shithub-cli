@@ -136,6 +136,41 @@ func TestEditRemoveTopicNotPresentWarns(t *testing.T) {
 	}
 }
 
+// TestEditRemoveTopicEmptyRepoStillWarns pins audit-I40: the H28
+// reproducer reframed — when the repo has *zero* topics (server
+// returns null/[]), `--remove-topic "FOO"` should still print the
+// "not present" note. Pre-H28 the path was silent regardless of
+// whether the topic was present-but-different or just missing; the
+// audit re-flagged the empty-list case because the user expectation
+// is the same: "I asked to remove X, X wasn't there, tell me."
+func TestEditRemoveTopicEmptyRepoStillWarns(t *testing.T) {
+	tf := cmdutiltest.New(t)
+	// Server reports zero topics — the auditor's reproducer was a
+	// fresh repo with no topics at all.
+	tf.Server.RegisterJSON(http.MethodGet, "/api/v1/repos/o/r", 200, repos.Repo{
+		Name: "r", Topics: nil,
+	})
+	tf.Server.Handle(http.MethodPut, "/api/v1/repos/o/r/topics", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(repos.TopicsPayload{Names: []string{}})
+	})
+
+	opts := &options{
+		IO:           tf.IOStreams,
+		HTTPClient:   tf.Factory.HTTPClient,
+		DefaultHost:  tf.Factory.DefaultHost,
+		RepoArg:      "o/r",
+		RemoveTopics: []string{"FOO"},
+	}
+	if err := Run(context.Background(), opts); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	stderr := tf.ErrOut.String()
+	if !strings.Contains(stderr, "FOO") || !strings.Contains(stderr, "not present") {
+		t.Errorf("empty-repo --remove-topic should still warn; got stderr: %s", stderr)
+	}
+}
+
 func TestEditNoFlagsErrors(t *testing.T) {
 	tf := cmdutiltest.New(t)
 	opts := &options{
