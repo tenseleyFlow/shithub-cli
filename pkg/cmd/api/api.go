@@ -77,6 +77,10 @@ type Options struct {
 
 	// Hostname overrides the active host for this call.
 	Hostname string
+	// HostnameSet distinguishes `--hostname ""` (explicit empty —
+	// must error) from "user didn't pass --hostname" (use active host).
+	// I3 (audit) — pre-fix the empty-string case silently fell back.
+	HostnameSet bool
 	// RepoFlag drives {owner}/{repo} placeholder resolution.
 	RepoFlag string
 
@@ -124,6 +128,7 @@ array bodies; --slurp wraps pages in an outer array.`,
 		RunE: func(c *cobra.Command, args []string) error {
 			opts.Endpoint = args[0]
 			opts.MethodSet = c.Flags().Changed("method")
+			opts.HostnameSet = c.Flags().Changed("hostname")
 			return Run(c.Context(), opts)
 		},
 	}
@@ -157,7 +162,13 @@ func Run(ctx context.Context, opts *Options) error {
 	}
 
 	var host string
-	if opts.Hostname != "" {
+	// I3 (audit): distinguish "user passed --hostname" from "didn't
+	// pass". HostnameSet=true means the user typed the flag — even an
+	// explicit empty value goes through ValidateHost so the same
+	// "config: hostname is required" error users get from `--hostname
+	// "   "` (whitespace, already rejected by H7) fires for the bare
+	// empty case too.
+	if opts.HostnameSet {
 		h, err := config.ValidateHost(opts.Hostname)
 		if err != nil {
 			return err
@@ -259,8 +270,21 @@ func validate(opts *Options) error {
 		return errors.New("api: --input is mutually exclusive with -F/-f")
 	}
 	if opts.Cache != "" {
-		if _, err := time.ParseDuration(opts.Cache); err != nil {
-			return fmt.Errorf("api: --cache duration: %w", err)
+		// I20+I22+I38 (audit): pre-fix the parser error leaked the
+		// Go-internal `time: invalid duration ...` prefix (I22), and
+		// arbitrarily large values like `999999h` (~100,000 years)
+		// passed without clamp (I20/I38). Wrap the parse error with
+		// an actionable hint and cap at the documented max (24h —
+		// gh's cap, conservative for a disk cache).
+		d, err := time.ParseDuration(opts.Cache)
+		if err != nil {
+			return fmt.Errorf("api: --cache must be a positive duration (e.g., 5m, 1h, 24h); got %q", opts.Cache)
+		}
+		if d <= 0 {
+			return fmt.Errorf("api: --cache must be a positive duration (e.g., 5m, 1h, 24h); got %q", opts.Cache)
+		}
+		if d > maxCacheTTL {
+			return fmt.Errorf("api: --cache exceeds the %s cap; got %q", maxCacheTTL, opts.Cache)
 		}
 		if opts.Paginate {
 			return errors.New("api: --cache is not supported with --paginate")
@@ -317,6 +341,11 @@ func readInput(path string, stdin io.Reader) ([]byte, error) {
 
 // readFileContents wraps os.ReadFile so an extra import doesn't sneak
 // into other files in the package.
+// maxCacheTTL caps the --cache value. gh's documented cap is 24h.
+// I20+I38 (audit) — pre-fix `999999h` (~100,000 years) passed
+// without bound check, silently giving the user infinite cache.
+const maxCacheTTL = 24 * time.Hour
+
 var readFileContents = func(path string) ([]byte, error) {
 	return readFile(path)
 }

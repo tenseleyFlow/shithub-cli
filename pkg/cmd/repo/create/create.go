@@ -203,9 +203,51 @@ func splitNameArg(arg string) (owner, name string, err error) {
 		if perr != nil {
 			return "", "", perr
 		}
+		// I24 (audit): pre-fix `repo create "../sneaky"` split into
+		// owner=".." + name="sneaky", then sent off to the API which
+		// 404s "org not found" — a confusing "did you try path
+		// traversal?" error for innocent typos. Reject owner names
+		// that don't look like an actual slug at the CLI boundary.
+		if !validSlug(ref.Owner) {
+			return "", "", fmt.Errorf("repo create: invalid owner name %q (must be [a-z0-9._-], no leading/trailing punctuation)", ref.Owner)
+		}
+		if !validSlug(ref.Name) {
+			return "", "", fmt.Errorf("repo create: invalid repo name %q (must be [a-z0-9._-], no leading/trailing punctuation)", ref.Name)
+		}
 		return ref.Owner, ref.Name, nil
 	}
 	return "", arg, nil
+}
+
+// validSlug reports whether s looks like a real owner/repo slug — the
+// canonical [a-z0-9._-] character class with no leading or trailing
+// punctuation. Used by I24 to reject `..`, `.`, `-`, `foo/`, etc. at
+// the CLI before they reach the server and surface as misleading
+// "org not found" errors.
+func validSlug(s string) bool {
+	if s == "" {
+		return false
+	}
+	switch s[0] {
+	case '.', '-':
+		return false
+	}
+	switch s[len(s)-1] {
+	case '.', '-':
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '.', r == '-', r == '_':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // promptForFlags drives the interactive flow. The defaults are deliberately
