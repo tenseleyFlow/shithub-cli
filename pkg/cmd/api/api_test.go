@@ -505,3 +505,74 @@ func decodeRequest(r *http.Request) (map[string]any, error) {
 	err := json.NewDecoder(r.Body).Decode(&body)
 	return body, err
 }
+
+// TestRunCacheRejectsOverCap pins audit-I20+I38: pre-fix `--cache
+// 999999h` (~100,000 years) passed without bound check, silently
+// downgrading to whatever the on-disk cache TTL clamp turned out to
+// be. Now we cap at maxCacheTTL.
+func TestRunCacheRejectsOverCap(t *testing.T) {
+	opts, _ := newOpts(t)
+	opts.Endpoint = "u"
+	opts.Cache = "999999h"
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for over-cap --cache value")
+	}
+	if !strings.Contains(err.Error(), "cap") {
+		t.Errorf("error should mention the cap: %v", err)
+	}
+}
+
+// TestRunCacheRejectsZeroOrNegative pins audit-I20: `--cache 0s` and
+// negative values were already rejected at parse time for some forms
+// but `0s` parsed fine and silently no-op'd the cache. Now both
+// surface a clear error.
+func TestRunCacheRejectsZeroOrNegative(t *testing.T) {
+	for _, v := range []string{"0s", "-5m"} {
+		opts, _ := newOpts(t)
+		opts.Endpoint = "u"
+		opts.Cache = v
+		err := Run(context.Background(), opts)
+		if err == nil {
+			t.Errorf("expected error for --cache %q", v)
+		}
+	}
+}
+
+// TestRunCacheWrapsParseError pins audit-I22: the Go-internal
+// `time: invalid duration "..."` prefix used to leak through to the
+// user. Now we emit an actionable hint with sample valid durations.
+func TestRunCacheWrapsParseError(t *testing.T) {
+	opts, _ := newOpts(t)
+	opts.Endpoint = "u"
+	opts.Cache = "bogus"
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for bogus --cache value")
+	}
+	if strings.Contains(err.Error(), "time: invalid duration") {
+		t.Errorf("error should not leak Go-internal time prefix: %v", err)
+	}
+	if !strings.Contains(err.Error(), "1h") || !strings.Contains(err.Error(), "5m") {
+		t.Errorf("error should suggest valid duration examples: %v", err)
+	}
+}
+
+// TestRunHostnameExplicitEmptyRejects pins audit-I3: `--hostname ""`
+// (explicit empty) used to silently fall back to the configured host.
+// H10/H7 closed the whitespace and scheme variants; this one's the
+// last bare-empty hole. HostnameSet=true with empty string now hits
+// the same "config: hostname is required" path.
+func TestRunHostnameExplicitEmptyRejects(t *testing.T) {
+	opts, _ := newOpts(t)
+	opts.Endpoint = "u"
+	opts.Hostname = ""
+	opts.HostnameSet = true
+	err := Run(context.Background(), opts)
+	if err == nil {
+		t.Fatal("expected error for explicit empty --hostname")
+	}
+	if !strings.Contains(err.Error(), "hostname is required") {
+		t.Errorf("error should match the whitespace case: %v", err)
+	}
+}
