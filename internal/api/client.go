@@ -176,6 +176,39 @@ func (c *Client) Host() string { return c.host }
 // BaseURL returns the resolved scheme://host[:port] string.
 func (c *Client) BaseURL() string { return c.baseURL }
 
+// UserAgent returns the User-Agent string this client stamps on every
+// outgoing request. Exposed for `api --verbose` (I53), which needs to
+// echo what's actually on the wire — including the headers the client
+// injects, not just the caller's `-H` overrides.
+func (c *Client) UserAgent() string { return c.userAgent }
+
+// VerboseRequestHeaders returns the effective header set this client
+// would send for a request, with `Authorization` already redacted. It
+// mirrors applyHeaders without performing the actual auth lookup — so
+// `api --verbose` can show User-Agent / Accept / Content-Type / any
+// caller -H overrides exactly as they'd land server-side. Returned
+// map is owned by the caller.
+//
+// I53 (audit): pre-fix `--verbose` echoed only the bare URL and
+// whatever -H the user typed; headers the api.Client injected
+// (User-Agent, Accept, …) were invisible, so debugging header
+// negotiation required a Go debugger.
+func (c *Client) VerboseRequestHeaders(callerHeaders http.Header, hasBody bool) http.Header {
+	out := http.Header{}
+	out.Set("Authorization", "[redacted]")
+	out.Set("User-Agent", c.userAgent)
+	out.Set("Accept", "application/json")
+	if hasBody {
+		out.Set("Content-Type", "application/json")
+	}
+	for k, vs := range callerHeaders {
+		for _, v := range vs {
+			out.Set(k, v)
+		}
+	}
+	return out
+}
+
 // requestOptions captures per-request overrides applied via RequestOption.
 type requestOptions struct {
 	owner    string
